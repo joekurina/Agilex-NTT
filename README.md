@@ -3,8 +3,11 @@
 | Optimized for                     | Description
 |:---                               |:---
 | OS                                | Linux Ubuntu LTS 20.04
-| Hardware                          | Terasic DE10-Agilex FPGA Card
+| Hardware                          | Terasic&reg; DE10-Agilex FPGA Card
 | Software                          | Intel&reg; oneAPI DPC++ Compiler, Intel&reg; FPGA Add-on for oneAPI Base Toolkit
+
+## Dependencies
+libntl-dev package
 
 ## Purpose
 This project performs the NTT Tests taken from SEAL Embedded on the DE10-Agilex Card
@@ -14,7 +17,7 @@ This project performs the NTT Tests taken from SEAL Embedded on the DE10-Agilex 
 ### Include Files
 The include folder is located at %ONEAPI_ROOT%\dev-utilities\latest\include on your development system.
 
-### On a Linu* System
+### On a Linux System
 The following instructions assume you are in the project's root folder.
 
 To build the template for FPGA Emulator (fast compile time, targets a CPU-emulated FPGA device):
