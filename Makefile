@@ -2,16 +2,17 @@ TARGET_EMU    = fpga_emu
 TARGET_HW     = fpga_hardware
 TARGET_REPORT = fpga_report.a
 
-SRCS     = src/main.cpp
+# Source files
+SRCS     = src/main.cpp src/kernel/ntt.cpp
 OBJS     = $(SRCS:.cpp=.o)
 ETS      = $(SRCS:.cpp=.d)
 
+# Compiler and flags
 CXX      = dpcpp
-CXXFLAGS = -std=c++17
+CXXFLAGS = -std=c++17 -Iinclude -Iinclude/kernel -Iinclude/utils
 
 .PHONY: build build_emu build_hw report run_emu run_hw clean run
 .DEFAULT_GOAL := build_emu
-
 
 # Intel-supported FPGA cards 
 FPGA_DEVICE_A10 = intel_a10gx_pac:pac_a10
@@ -23,7 +24,6 @@ FPGA_DEVICE     = $(FPGA_DEVICE_A7)
 EMULATOR_FLAGS  = -fintelfpga -DFPGA_EMULATOR
 HARDWARE_FLAGS  = -fintelfpga -Xshardware -Xsboard=$(FPGA_DEVICE)
 REPORT_FLAGS    = $(HARDWARE_FLAGS) -fsycl-link
-
 
 # Build for FPGA emulator
 build: build_emu
