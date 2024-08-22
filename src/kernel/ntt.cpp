@@ -53,61 +53,392 @@ defPipe1d(barrettTwiddleFactorsPipe, Wide64BytesType, 16, NUM_NTT_COMPUTE_UNITS)
 
 // Implement the kernel function
 template <size_t id>
-void fwd_ntt_kernel(sycl::queue& q) {
+void fwd_ntt_kernel(buffer<uint64_t, 1>& inData_buf, 
+                    buffer<uint64_t, 1>& inData2_buf,
+                    buffer<uint64_t, 1>& modulus_buf,
+                    buffer<uint64_t, 1>& twiddleFactors_buf,
+                    buffer<uint64_t, 1>& barrettTwiddleFactors_buf,
+                    buffer<uint64_t, 1>& outData_buf,
+                    sycl::queue& q) {
+
     q.submit([&](sycl::handler& h) {
+        // Create accessors for the buffers
+        auto inData_acc = inData_buf.template get_access<access::mode::read>(h);
+        auto inData2_acc = inData2_buf.template get_access<access::mode::read>(h);
+        auto modulus_acc = modulus_buf.template get_access<access::mode::read>(h);
+        auto twiddleFactors_acc = twiddleFactors_buf.template get_access<access::mode::read>(h);
+        auto barrettTwiddleFactors_acc = barrettTwiddleFactors_buf.template get_access<access::mode::read>(h);
+        auto outData_acc = outData_buf.template get_access<access::mode::discard_write>(h);
+
         h.single_task<FWD_NTT<id>>([=]() [[intel::kernel_args_restrict]] {
-            // The full implementation of your NTT kernel goes here
-            // (use the provided kernel code)
+
+            // Internal memory allocations, replicated for each compute unit
+            [[intel::fpga_memory("BLOCK_RAM")]] [[intel::numbanks(VEC)]] 
+            [[intel::max_replicates(2)]] unsigned long X[FPGA_NTT_SIZE / VEC][VEC];
+            
+            [[intel::fpga_memory("BLOCK_RAM")]] [[intel::numbanks(VEC)]] 
+            [[intel::max_replicates(2)]] unsigned long X2[FPGA_NTT_SIZE / VEC][VEC];
+            
+            [[intel::fpga_memory("BLOCK_RAM")]] [[intel::numbanks(VEC)]] 
+            [[intel::max_replicates(2)]] unsigned char Xm[FPGA_NTT_SIZE / VEC][VEC];
+
+            unsigned long local_roots[FPGA_NTT_SIZE];
+            unsigned long local_precons[FPGA_NTT_SIZE];
+
+            constexpr int computeUnitID = id;
+            constexpr size_t numTwiddlePerWord = sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t);
+
+            for (int i = 0; i < FPGA_NTT_SIZE / VEC; i++) {
+#pragma unroll
+                for (int j = 0; j < VEC; j++) {
+                    Xm[i][j] = 0;
+                }
+            }
+
+            while (true) {
+                unsigned32Bits_t miniBatchSize = miniBatchSizePipeNTT::PipeAt<computeUnitID>::read();
+
+                for (int i = 0; i < FPGA_NTT_SIZE / numTwiddlePerWord; i++) {
+                    Wide64BytesType vecTwiddle = twiddleFactorsPipe::PipeAt<computeUnitID>::read();
+#pragma unroll
+                    for (size_t j = 0; j < numTwiddlePerWord; ++j) {
+                        local_roots[i * numTwiddlePerWord + j] = vecTwiddle.data[j];
+                    }
+                }
+
+                for (int i = 0; i < FPGA_NTT_SIZE / numTwiddlePerWord; i++) {
+                    Wide64BytesType vecExponent = barrettTwiddleFactorsPipe::PipeAt<computeUnitID>::read();
+#pragma unroll
+                    for (size_t j = 0; j < numTwiddlePerWord; ++j) {
+                        local_precons[i * numTwiddlePerWord + j] = vecExponent.data[j];
+                    }
+                }
+
+                unsigned64Bits_t modulus = modulusPipe::PipeAt<computeUnitID>::read();
+
+                for (int mb = 0; mb < miniBatchSize; mb++) {
+                    unsigned64Bits_t coeff_mod = modulus;
+                    unsigned64Bits_t twice_mod = modulus << 1;
+                    unsigned64Bits_t t = (FPGA_NTT_SIZE >> 1);
+
+                    unsigned int t_log = FPGA_NTT_SIZE_LOG - 1;
+                    unsigned char Xm_val = 0;
+                    size_t s_index = 0;
+
+                    for (unsigned int m = 1; m < FPGA_NTT_SIZE; m <<= 1) {
+                        Xm_val++;
+                        [[intel::ivdep(X)]] [[intel::ivdep(X2)]] [[intel::ivdep(Xm)]]
+                        for (unsigned int k = 0; k < FPGA_NTT_SIZE / 2 / VEC; k++) {
+                            [[intel::fpga_register]] unsigned long curX[VEC * 2];
+                            [[intel::fpga_register]] unsigned long curX2[VEC * 2];
+                            [[intel::fpga_register]] unsigned long curX_rep[VEC * 2];
+                            [[intel::fpga_register]] unsigned long curX2_rep[VEC * 2];
+
+                            size_t i0 = (k * VEC + 0) >> t_log;
+                            size_t j0 = (k * VEC + 0) & (t - 1);
+                            size_t j10 = i0 * 2 * t;
+
+                            bool b_same_vec = ((j10 + j0) / VEC) == ((j10 + j0 + t) / VEC);
+                            size_t X_ind = (j10 + j0) / VEC;
+                            size_t Xt_ind = (j10 + j0 + t) / VEC + b_same_vec;
+
+                            WideVecType elements_in;
+                            if (m == 1) {
+                                elements_in = inDataPipe::PipeAt<computeUnitID>::read();
+                            }
+
+#pragma unroll
+                            for (int n = 0; n < VEC; n++) {
+                                size_t i = (k * VEC + n) >> t_log;
+                                size_t j = (k * VEC + n) & (t - 1);
+                                size_t j1 = i * 2 * t;
+                                if (m == 1) {
+                                    curX[n] = elements_in.data[n];
+                                    curX[n + VEC] = elements_in.data[VEC + n];
+                                } else {
+                                    curX[n] = X[X_ind][n];
+                                    curX[n + VEC] = X[Xt_ind][n];
+                                    curX2[n] = X2[X_ind][n];
+                                    curX2[n + VEC] = X2[Xt_ind][n];
+                                }
+                            }
+
+                            WideVecType elements_out;
+                            if (t == 1) {
+#pragma unroll
+                                for (int n = 0; n < VEC; n++) {
+                                    const int cur_t = 1;
+                                    const int Xn = n / cur_t * (2 * cur_t) + n % cur_t;
+                                    const int Xnt = Xn + ((cur_t < VEC) ? cur_t : VEC);
+                                    curX_rep[n] = curX[Xn];
+                                    curX2_rep[n] = curX2[Xn];
+                                    curX_rep[VEC + n] = curX[Xnt];
+                                    curX2_rep[VEC + n] = curX2[Xnt];
+                                }
+#if VEC >= 4
+                            } else if (t == 2) {
+#pragma unroll
+                                for (int n = 0; n < VEC; n++) {
+                                    const int cur_t = 2;
+                                    const int Xn = n / cur_t * (2 * cur_t) + n % cur_t;
+                                    const int Xnt = Xn + ((cur_t < VEC) ? cur_t : VEC);
+                                    curX_rep[n] = curX[Xn];
+                                    curX2_rep[n] = curX2[Xn];
+                                    curX_rep[VEC + n] = curX[Xnt];
+                                    curX2_rep[VEC + n] = curX2[Xnt];
+                                }
+#endif
+#if VEC >= 8
+                            } else if (t == 4) {
+#pragma unroll
+                                for (int n = 0; n < VEC; n++) {
+                                    const int cur_t = 4;
+                                    const int Xn = n / cur_t * (2 * cur_t) + n % cur_t;
+                                    const int Xnt = Xn + ((cur_t < VEC) ? cur_t : VEC);
+                                    curX_rep[n] = curX[Xn];
+                                    curX2_rep[n] = curX2[Xn];
+                                    curX_rep[VEC + n] = curX[Xnt];
+                                    curX2_rep[VEC + n] = curX2[Xnt];
+                                }
+#endif
+#if VEC >= 16
+                            } else if (t == 8) {
+#pragma unroll
+                                for (int n = 0; n < VEC; n++) {
+                                    const int cur_t = 8;
+                                    const int Xn = n / cur_t * (2 * cur_t) + n % cur_t;
+                                    const int Xnt = Xn + ((cur_t < VEC) ? cur_t : VEC);
+                                    curX_rep[n] = curX[Xn];
+                                    curX2_rep[n] = curX2[Xn];
+                                    curX_rep[VEC + n] = curX[Xnt];
+                                    curX2_rep[VEC + n] = curX2[Xnt];
+                                }
+#endif
+#if VEC >= 32
+                            } else if (t == 16) {
+#pragma unroll
+                                for (int n = 0; n < VEC; n++) {
+                                    const int cur_t = 16;
+                                    const int Xn = n / cur_t * (2 * cur_t) + n % cur_t;
+                                    const int Xnt = Xn + ((cur_t < VEC) ? cur_t : VEC);
+                                    curX_rep[n] = curX[Xn];
+                                    curX2_rep[n] = curX2[Xn];
+                                    curX_rep[VEC + n] = curX[Xnt];
+                                    curX2_rep[VEC + n] = curX2[Xnt];
+                                }
+#endif
+                            } else {
+#pragma unroll
+                                for (int n = 0; n < VEC; n++) {
+                                    curX_rep[n] = curX[n];
+                                    curX2_rep[n] = curX2[n];
+                                    curX_rep[VEC + n] = curX[VEC + n];
+                                    curX2_rep[VEC + n] = curX2[VEC + n];
+                                }
+                            }
+
+                            if (m == (FPGA_NTT_SIZE / 2)) {
+                                s_index = k * (VEC * 2);
+                                outDataPipe::PipeAt<computeUnitID>::write(elements_out);
+                            }
+
+#pragma unroll
+                            for (int n = 0; n < VEC; n++) {
+#if REORDER
+                                X[X_ind][n] = curX_rep[n];
+                                X2[Xt_ind][n] = curX_rep[n + VEC];
+                                Xm[X_ind][n] = Xm_val;
+#endif
+                            }
+                        }
+
+                        t >>= 1;
+                        t_log -= 1;
+                    }
+                }
+            }
         });
     });
 }
 
-// Implement the ntt_input_kernel function
-void ntt_input_kernel(unsigned int numFrames, uint64_t* k_inData,
-                      uint64_t* k_inData2, uint64_t* k_modulus,
-                      uint64_t* k_twiddleFactors,
-                      uint64_t* k_barrettTwiddleFactors) {
-    // The implementation of your ntt_input_kernel goes here
-    // (use the provided kernel code)
+void ntt_input_kernel(buffer<uint64_t, 1>& inData_buf,
+                      buffer<uint64_t, 1>& inData2_buf,
+                      buffer<uint64_t, 1>& modulus_buf,
+                      buffer<uint64_t, 1>& twiddleFactors_buf,
+                      buffer<uint64_t, 1>& barrettTwiddleFactors_buf,
+                      unsigned int numFrames,
+                      sycl::queue& q) {
+    
+    q.submit([&](sycl::handler& h) {
+        // Create accessors for the buffers
+        auto inData_acc = inData_buf.get_access<access::mode::read>(h);
+        auto inData2_acc = inData2_buf.get_access<access::mode::read>(h);
+        auto modulus_acc = modulus_buf.get_access<access::mode::read>(h);
+        auto twiddleFactors_acc = twiddleFactors_buf.get_access<access::mode::read>(h);
+        auto barrettTwiddleFactors_acc = barrettTwiddleFactors_buf.get_access<access::mode::read>(h);
+
+        h.single_task([=]() {
+            // Broadcast miniBatchSize to each NTT autorun kernel instance
+            Unroller<0, NUM_NTT_COMPUTE_UNITS>::Step([&](auto i) {
+                unsigned32Bits_t fractionalMiniBatch =
+                    (numFrames % NUM_NTT_COMPUTE_UNITS) / (i + 1);
+                if (fractionalMiniBatch > 0)
+                    fractionalMiniBatch = 1;
+                else
+                    fractionalMiniBatch = 0;
+                unsigned32Bits_t miniBatchSize =
+                    (numFrames / NUM_NTT_COMPUTE_UNITS) + fractionalMiniBatch;
+                miniBatchSizePipeNTT::PipeAt<i>::write(miniBatchSize);
+            });
+
+            // Assuming the twiddle factors and the complex root of unity are similar
+            // distribute roots of unity to each kernel
+            constexpr size_t numTwiddlePerWord =
+                sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t);
+            constexpr unsigned int iterations = FPGA_NTT_SIZE / numTwiddlePerWord;
+
+            for (size_t i = 0; i < iterations; i++) {
+                Wide64BytesType tw;
+#pragma unroll
+                for (size_t j = 0; j < numTwiddlePerWord; j++) {
+                    tw.data[j] = twiddleFactors_acc[i * numTwiddlePerWord + j];
+                }
+
+                // Broadcast twiddles to all compute units
+                Unroller<0, NUM_NTT_COMPUTE_UNITS>::Step(
+                    [&](auto c) { twiddleFactorsPipe::PipeAt<c>::write(tw); });
+            }
+
+            for (size_t i = 0; i < FPGA_NTT_SIZE / numTwiddlePerWord; i++) {
+                Wide64BytesType tw;
+#pragma unroll
+                for (size_t j = 0; j < numTwiddlePerWord; j++) {
+                    tw.data[j] = barrettTwiddleFactors_acc[i * numTwiddlePerWord + j];
+                }
+
+                // Broadcast twiddles to all compute units
+                Unroller<0, NUM_NTT_COMPUTE_UNITS>::Step(
+                    [&](auto c) { barrettTwiddleFactorsPipe::PipeAt<c>::write(tw); });
+            }
+
+            // Broadcast modulus to all the kernels
+            unsigned64Bits_t mod = modulus_acc[0];
+            Unroller<0, NUM_NTT_COMPUTE_UNITS>::Step(
+                [&](auto c) { modulusPipe::PipeAt<c>::write(mod); });
+
+            ////////////////////////////////////////////////////////////////////////////////////
+            // Retrieve one NTT data and stream to different kernels, per iteration for
+            // top-level loop
+
+            constexpr unsigned int numElementsInVec =
+                sizeof(WideVecType) / sizeof(unsigned64Bits_t);
+            Unroller<0, NUM_NTT_COMPUTE_UNITS>::Step([&](auto computeUnitID) {
+                for (unsigned int b = 0; b < numFrames; b++) {
+                    if (b % NUM_NTT_COMPUTE_UNITS == computeUnitID) {
+                        for (size_t i = 0; i < FPGA_NTT_SIZE / numElementsInVec; i++) {
+                            WideVecType inVec;
+                            unsigned long offset = b * FPGA_NTT_SIZE + i * VEC;
+#pragma unroll
+                            for (size_t j = 0; j < VEC; j++) {
+                                inVec.data[j] = inData_acc[offset + j];
+                                inVec.data[j + VEC] =
+                                    inData2_acc[offset + FPGA_NTT_SIZE / 2 + j];
+                            }
+                            inDataPipe::PipeAt<computeUnitID>::write(inVec);
+                        }
+                    }
+                }
+            });
+        });
+    });
 }
 
 // Implement the ntt_output_kernel function
-void ntt_output_kernel(int numFrames, uint64_t* k_outData) {
-    // The implementation of your ntt_output_kernel goes here
-    // (use the provided kernel code)
+void ntt_output_kernel(buffer<uint64_t, 1>& outData_buf,
+                       int numFrames,
+                       sycl::queue& q) {
+    
+    q.submit([&](sycl::handler& h) {
+        // Create accessor for the output buffer
+        auto outData_acc = outData_buf.get_access<access::mode::write>(h);
+
+        h.single_task([=]() {
+            constexpr unsigned int numElementsInVec =
+                sizeof(WideVecType) / sizeof(unsigned64Bits_t);
+
+            Unroller<0, NUM_NTT_COMPUTE_UNITS>::Step([&](auto computeUnitID) {
+                for (size_t b = 0; b < numFrames; b++) {
+                    if (b % NUM_NTT_COMPUTE_UNITS == computeUnitID) {
+                        for (size_t i = 0; i < FPGA_NTT_SIZE / numElementsInVec; i++) {
+                            WideVecType oVec =
+                                outDataPipe::PipeAt<computeUnitID>::read();
+                            unsigned long offset =
+                                b * FPGA_NTT_SIZE + i * numElementsInVec;
+#pragma unroll
+                            for (size_t j = 0; j < numElementsInVec; j++) {
+                                outData_acc[offset + j] = oVec.data[j];
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    });
 }
+
+class FWD_NTT_INPUT;
+class FWD_NTT_OUTPUT;
+
 
 // Implement the C interface functions
 extern "C" {
-    void fwd_ntt(sycl::queue& q) {
-        Unroller<0, NUM_NTT_COMPUTE_UNITS>::Step(
-            [&](auto idx) { fwd_ntt_kernel<idx>(q); });
-    }
 
-    sycl::event ntt_input(sycl::queue& q, unsigned int numFrames, uint64_t* inData,
-                          uint64_t* inData2, uint64_t* modulus,
-                          uint64_t* twiddleFactors,
-                          uint64_t* barrettTwiddleFactors) {
-        return q.submit([&](sycl::handler& h) {
-            h.single_task<FWD_NTT_INPUT>([=]() [[intel::kernel_args_restrict]] {
-                ntt_input_kernel(numFrames, inData, inData2, modulus,
-                                 twiddleFactors, barrettTwiddleFactors);
-            });
-        });
-    }
+// fwd ntt interface, aligned with hexl-fpga fwd_ntt.cl file.
 
-    sycl::event ntt_output(sycl::queue& q, int numFrames,
-                           uint64_t* outData_in_svm) {
-        return q.submit([&](sycl::handler& h) {
-            h.single_task<FWD_NTT_OUTPUT>([=]() [[intel::kernel_args_restrict]] {
-                ntt_output_kernel(numFrames, outData_in_svm);
-            });
-        });
-    }
+/**
+ * @brief submit 4 ntt kernel compute units by default, e.g.,
+ * NUM_NTT_COMPUTE_UNITS = 4
+ *
+ * @param q SYCL queue
+ */
+void fwd_ntt(sycl::queue& q,
+             buffer<uint64_t, 1>& inData_buf,
+             buffer<uint64_t, 1>& inData2_buf,
+             buffer<uint64_t, 1>& modulus_buf,
+             buffer<uint64_t, 1>& twiddleFactors_buf,
+             buffer<uint64_t, 1>& barrettTwiddleFactors_buf,
+             buffer<uint64_t, 1>& outData_buf) {
+    Unroller<0, NUM_NTT_COMPUTE_UNITS>::Step([&](auto idx) {
+        fwd_ntt_kernel<idx>(inData_buf, inData2_buf, modulus_buf,
+                            twiddleFactors_buf, barrettTwiddleFactors_buf,
+                            outData_buf, q);
+    });
 }
 
-// Explicit instantiation of the template function for each compute unit
-template void fwd_ntt_kernel<0>(sycl::queue& q);
-template void fwd_ntt_kernel<1>(sycl::queue& q);
-template void fwd_ntt_kernel<2>(sycl::queue& q);
-template void fwd_ntt_kernel<3>(sycl::queue& q);
+sycl::event ntt_input(sycl::queue& q, unsigned int numFrames,
+                      buffer<uint64_t, 1>& inData_buf,
+                      buffer<uint64_t, 1>& inData2_buf,
+                      buffer<uint64_t, 1>& modulus_buf,
+                      buffer<uint64_t, 1>& twiddleFactors_buf,
+                      buffer<uint64_t, 1>& barrettTwiddleFactors_buf) {
+    auto e = q.submit([&](sycl::handler& h) {
+        h.single_task<FWD_NTT_INPUT>([=]() [[intel::kernel_args_restrict]] {
+            ntt_input_kernel(inData_buf, inData2_buf, modulus_buf,
+                             twiddleFactors_buf, barrettTwiddleFactors_buf,
+                             numFrames, q);
+        });
+    });
+
+    return e;
+}
+
+sycl::event ntt_output(sycl::queue& q, int numFrames,
+                       buffer<uint64_t, 1>& outData_buf) {
+    auto e = q.submit([&](sycl::handler& h) {
+        h.single_task<FWD_NTT_OUTPUT>([=]() [[intel::kernel_args_restrict]] {
+            ntt_output_kernel(outData_buf, numFrames, q);
+        });
+    });
+    return e;
+}
+}  // end of extern "C"
