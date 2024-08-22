@@ -1,6 +1,6 @@
 // ntt.cpp
 #include "ntt.h"
-#include "./utils/pipe_def_marcos.hpp"
+#include "./utils/pipe_def_macros.hpp"
 #include "./utils/pipe_array.hpp"
 #include "./utils/unroller.hpp"
 
