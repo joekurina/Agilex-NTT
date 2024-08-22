@@ -3,6 +3,7 @@
 #include "kernel/ntt.h"
 #include <CL/sycl.hpp>
 #include <sycl/ext/intel/fpga_extensions.hpp>
+#include <dpc_common.hpp>
 #include <iostream>
 
 #define FPGA_NTT_SIZE 16384 // FPGA_NTT_SIZE must be a power of 2
