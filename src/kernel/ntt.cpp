@@ -388,3 +388,11 @@ void ntt_output_kernel(buffer<uint64_t, 1>& outData_buf,
 
 class FWD_NTT_INPUT;
 class FWD_NTT_OUTPUT;
+
+template void fwd_ntt_kernel<0>(sycl::queue& q, 
+                                buffer<uint64_t, 1>& inData_buf, 
+                                buffer<uint64_t, 1>& inData2_buf, 
+                                buffer<uint64_t, 1>& modulus_buf, 
+                                buffer<uint64_t, 1>& twiddleFactors_buf, 
+                                buffer<uint64_t, 1>& barrettTwiddleFactors_buf, 
+                                buffer<uint64_t, 1>& outData_buf);
