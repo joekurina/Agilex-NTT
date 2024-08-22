@@ -52,7 +52,7 @@ int main() {
     }
 
     // Call the NTT functions
-    fwd_ntt_kernel(q, inData_buf, inData2_buf, modulus_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, outData_buf);
+    fwd_ntt_kernel<0>(q, inData_buf, inData2_buf, modulus_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, outData_buf);
 
     sycl::event input_event = ntt_input(q, numFrames, inData_buf, inData2_buf, modulus_buf,
                                     twiddleFactors_buf, barrettTwiddleFactors_buf);
