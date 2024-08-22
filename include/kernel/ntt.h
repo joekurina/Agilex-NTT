@@ -4,6 +4,24 @@
 #include <CL/sycl.hpp>
 #include <sycl/ext/intel/fpga_extensions.hpp>
 
+#ifndef FPGA_NTT_SIZE
+#define FPGA_NTT_SIZE 16384  // Example size
+#endif
+
+#if FPGA_NTT_SIZE == 32
+#define FPGA_NTT_SIZE_LOG 5
+#elif FPGA_NTT_SIZE == 1024
+#define FPGA_NTT_SIZE_LOG 10
+#elif FPGA_NTT_SIZE == 8192
+#define FPGA_NTT_SIZE_LOG 13
+#elif FPGA_NTT_SIZE == 16384
+#define FPGA_NTT_SIZE_LOG 14
+#elif FPGA_NTT_SIZE == 32768
+#define FPGA_NTT_SIZE_LOG 15
+#else
+#error "Unsupported FPGA_NTT_SIZE"
+#endif
+
 using namespace cl::sycl;
 
 // Declare the FWD_NTT template class
