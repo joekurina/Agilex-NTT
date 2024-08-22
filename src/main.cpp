@@ -5,7 +5,10 @@
 #include <sycl/ext/intel/fpga_extensions.hpp>
 #include <iostream>
 
+#define FPGA_NTT_SIZE 16384 // FPGA_NTT_SIZE must be a power of 2
+
 using namespace cl::sycl;
+
 
 int main() {
     // Create a device selector
@@ -51,8 +54,8 @@ int main() {
     fwd_ntt(q, inData_buf, inData2_buf, modulus_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, outData_buf);
 
     sycl::event input_event = ntt_input(q, numFrames, inData_buf, inData2_buf, modulus_buf,
-                                        twiddleFactors_buf, barrettTwiddleFactors_buf);
-    
+                                    twiddleFactors_buf, barrettTwiddleFactors_buf);
+
     sycl::event output_event = ntt_output(q, numFrames, outData_buf);
 
     // Wait for the computation to finish
