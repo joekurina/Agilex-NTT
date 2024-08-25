@@ -386,5 +386,26 @@ void ntt_output_kernel(buffer<uint64_t, 1>& outData_buf,
     });
 }
 
+// Implement the fwd_ntt function
+void fwd_ntt(sycl::queue& q,
+             buffer<uint64_t, 1>& inData_buf,
+             buffer<uint64_t, 1>& inData2_buf,
+             buffer<uint64_t, 1>& modulus_buf,
+             buffer<uint64_t, 1>& twiddleFactors_buf,
+             buffer<uint64_t, 1>& barrettTwiddleFactors_buf,
+             buffer<uint64_t, 1>& outData_buf) {
+    fwd_ntt_kernel<0>(q, inData_buf, inData2_buf, modulus_buf, 
+                      twiddleFactors_buf, barrettTwiddleFactors_buf, outData_buf);
+}
+
+// Explicit template instantiation for fwd_ntt_kernel
+template void fwd_ntt_kernel<0>(sycl::queue& q,
+                                buffer<uint64_t, 1>& inData_buf,
+                                buffer<uint64_t, 1>& inData2_buf,
+                                buffer<uint64_t, 1>& modulus_buf,
+                                buffer<uint64_t, 1>& twiddleFactors_buf,
+                                buffer<uint64_t, 1>& barrettTwiddleFactors_buf,
+                                buffer<uint64_t, 1>& outData_buf);
+
 class FWD_NTT_INPUT;
 class FWD_NTT_OUTPUT;
