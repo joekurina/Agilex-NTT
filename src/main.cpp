@@ -55,10 +55,10 @@ int main() {
     fwd_ntt_kernel<0>(q, inData_buf, inData2_buf, modulus_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, outData_buf);
 
     // Call the input and output functions directly without capturing return values
-    ntt_input(q, numFrames, inData_buf, inData2_buf, modulus_buf,
+    ntt_input_kernel(q, numFrames, inData_buf, inData2_buf, modulus_buf,
               twiddleFactors_buf, barrettTwiddleFactors_buf);
 
-    ntt_output(q, numFrames, outData_buf);
+    ntt_output_kernel(q, numFrames, outData_buf);
 
     // Wait for the queue to finish processing
     q.wait();  // This waits for all events in the queue to complete
