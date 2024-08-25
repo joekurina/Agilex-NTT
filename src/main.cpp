@@ -10,7 +10,6 @@
 
 using namespace cl::sycl;
 
-
 int main() {
     // Create a device selector
 #if defined(FPGA_EMULATOR)
@@ -51,12 +50,17 @@ int main() {
         modulus_acc[0] = 65537; // Example modulus
     }
 
-    // Call the NTT functions
+    // Call the NTT functions in the correct order
+    sycl::event input_event = ntt_input(q, numFrames, inData_buf, inData2_buf, modulus_buf,
+                                        twiddleFactors_buf, barrettTwiddleFactors_buf);
+
+    // Ensure the input event is complete before launching the main kernel
+    input_event.wait();
+
+    // Launch the main NTT kernel
     fwd_ntt_kernel<0>(q, inData_buf, inData2_buf, modulus_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, outData_buf);
 
-    sycl::event input_event = ntt_input(q, numFrames, inData_buf, inData2_buf, modulus_buf,
-                                    twiddleFactors_buf, barrettTwiddleFactors_buf);
-
+    // Capture the output after the kernel has executed
     sycl::event output_event = ntt_output(q, numFrames, outData_buf);
 
     // Wait for the computation to finish
