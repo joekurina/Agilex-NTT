@@ -62,7 +62,7 @@ int main() {
 
     std::cout << "Calling forward NTT kernel..." << std::endl;
     // Call the NTT function
-    fwd_ntt_kernel<0>(q, inData_buf, inData2_buf, modulus_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, outData_buf);
+    fwd_ntt_kernel<0>(q);
     std::cout << "Forward NTT kernel completed." << std::endl;
     
     std::cout << "Calling NTT output kernel..." << std::endl;

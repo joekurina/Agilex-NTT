@@ -30,13 +30,7 @@ class FWD_NTT;
 
 // Declare the NTT functions with buffer-based signatures
 template <size_t id>
-void fwd_ntt_kernel(sycl::queue& q,
-                    buffer<uint64_t, 1>& inData_buf,
-                    buffer<uint64_t, 1>& inData2_buf,
-                    buffer<uint64_t, 1>& modulus_buf,
-                    buffer<uint64_t, 1>& twiddleFactors_buf,
-                    buffer<uint64_t, 1>& barrettTwiddleFactors_buf,
-                    buffer<uint64_t, 1>& outData_buf);
+void fwd_ntt_kernel(sycl::queue& q);
 
 void ntt_input_kernel(buffer<uint64_t, 1>& inData_buf,
                       buffer<uint64_t, 1>& inData2_buf,

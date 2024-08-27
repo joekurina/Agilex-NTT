@@ -23,7 +23,16 @@
 #pragma clang diagnostic warning "Compiling with external FPGA_NTT_SIZE"
 #endif
 
+#define LHIGH(num, type) \
+    ((type)(num) & ~((((type)1) << (sizeof(type) * 8 / 2)) - (type)1))
+#define LOW(num, type) \
+    ((type)(num) & ((((type)1) << (sizeof(type) * 8 / 2)) - (type)1))
+#define HIGH(num, type) ((type)(num) >> (sizeof(type) * 8 / 2))
+
 #define HEXL_FPGA_USE_64BIT_MULT
+#ifdef HEXL_FPGA_USE_64BIT_MULT
+#pragma clang diagnostic warning "Compiling with HEXL_FPGA_USE_64BIT_MULT"
+#endif
 
 typedef uint64_t unsigned64Bits_t;
 typedef unsigned int unsigned32Bits_t;
@@ -51,25 +60,25 @@ defPipe1d(modulusPipe, unsigned64Bits_t, 16, NUM_NTT_COMPUTE_UNITS);
 defPipe1d(twiddleFactorsPipe, Wide64BytesType, 16, NUM_NTT_COMPUTE_UNITS);
 defPipe1d(barrettTwiddleFactorsPipe, Wide64BytesType, 16, NUM_NTT_COMPUTE_UNITS);
 
+#if 32 == FPGA_NTT_SIZE
+#define FPGA_NTT_SIZE_LOG 5
+#elif 1024 == FPGA_NTT_SIZE
+#define FPGA_NTT_SIZE_LOG 10
+#elif 8192 == FPGA_NTT_SIZE
+#define FPGA_NTT_SIZE_LOG 13
+#elif 16384 == FPGA_NTT_SIZE
+#define FPGA_NTT_SIZE_LOG 14
+#elif 32768 == FPGA_NTT_SIZE
+#define FPGA_NTT_SIZE_LOG 15
+#endif
+
+template <size_t idx>
+class FWD_NTT;
+
 // Implement the kernel function
 template <size_t id>
-void fwd_ntt_kernel(sycl::queue& q,
-                    buffer<uint64_t, 1>& inData_buf,
-                    buffer<uint64_t, 1>& inData2_buf,
-                    buffer<uint64_t, 1>& modulus_buf,
-                    buffer<uint64_t, 1>& twiddleFactors_buf,
-                    buffer<uint64_t, 1>& barrettTwiddleFactors_buf,
-                    buffer<uint64_t, 1>& outData_buf) {
-
+void fwd_ntt_kernel(sycl::queue& q) {
     q.submit([&](sycl::handler& h) {
-        // Create accessors for the buffers
-        auto inData_acc = inData_buf.template get_access<access::mode::read>(h);
-        auto inData2_acc = inData2_buf.template get_access<access::mode::read>(h);
-        auto modulus_acc = modulus_buf.template get_access<access::mode::read>(h);
-        auto twiddleFactors_acc = twiddleFactors_buf.template get_access<access::mode::read>(h);
-        auto barrettTwiddleFactors_acc = barrettTwiddleFactors_buf.template get_access<access::mode::read>(h);
-        auto outData_acc = outData_buf.template get_access<access::mode::discard_write>(h);
-
         h.single_task<FWD_NTT<id>>([=]() [[intel::kernel_args_restrict]] {
 
             // Internal memory allocations, replicated for each compute unit
