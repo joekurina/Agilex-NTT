@@ -25,6 +25,8 @@ int main() {
     // Define the parameters
     const unsigned int numFrames = 1;
     const size_t dataSize = FPGA_NTT_SIZE; // Defined in ntt.cpp
+    
+    std::cout << "Initializing buffers..." << std::endl;
 
     // Create buffers for input and output data
     buffer<uint64_t, 1> inData_buf(dataSize);
@@ -33,6 +35,8 @@ int main() {
     buffer<uint64_t, 1> twiddleFactors_buf(dataSize);
     buffer<uint64_t, 1> barrettTwiddleFactors_buf(dataSize);
     buffer<uint64_t, 1> outData_buf(dataSize);
+
+    std::cout << "Initializing input data using host accessors..." << std::endl;
 
     // Initialize input data using a host accessor
     {
@@ -51,17 +55,26 @@ int main() {
         modulus_acc[0] = 65537; // Example modulus
     }
 
-    // Call the NTT functions
-    fwd_ntt_kernel<0>(q, inData_buf, inData2_buf, modulus_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, outData_buf);
-
+    std::cout << "Calling NTT input kernel..." << std::endl;
     // Call the input and output functions directly without capturing return values
     ntt_input_kernel(inData_buf, inData2_buf, modulus_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, numFrames, q);
+    std::cout << "NTT input kernel completed." << std::endl;
 
+    std::cout << "Calling forward NTT kernel..." << std::endl;
+    // Call the NTT function
+    fwd_ntt_kernel<0>(q, inData_buf, inData2_buf, modulus_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, outData_buf);
+    std::cout << "Forward NTT kernel completed." << std::endl;
+    
+    std::cout << "Calling NTT output kernel..." << std::endl;
     ntt_output_kernel(outData_buf, numFrames, q);
+    std::cout << "NTT output kernel completed." << std::endl;
 
+    std::cout << "Waiting for output event..." << std::endl;
     // Wait for the queue to finish processing
     q.wait();  // This waits for all events in the queue to complete
+    std::cout << "Output event completed." << std::endl;
 
+    std::cout << "Reading and printing output data..." << std::endl;
     // Display the results using a host accessor
     {
         host_accessor outData_acc(outData_buf, read_only);
@@ -69,6 +82,8 @@ int main() {
             std::cout << outData_acc[i] << std::endl;
         }
     }
+
+    std::cout << "Finished printing output data." << std::endl;
 
     return 0;
 }
