@@ -5,7 +5,6 @@
 template <size_t idx>
 class FWD_NTT;
 
-// Implement the kernel function
 template <size_t id>
 void fwd_ntt_kernel(sycl::queue& q,
                     sycl::buffer<WideVecType, 1>& inData_buf,
@@ -25,6 +24,7 @@ void fwd_ntt_kernel(sycl::queue& q,
         auto outData_acc = outData_buf.get_access<sycl::access::mode::write>(h);
 
         h.single_task<FWD_NTT<id>>([=]() [[intel::kernel_args_restrict]] {
+            // Initialize on-chip memory
             [[intel::fpga_memory("BLOCK_RAM")]] [[intel::numbanks(VEC)]] [[intel::max_replicates(2)]]
             unsigned long X[FPGA_NTT_SIZE / VEC][VEC];
             [[intel::fpga_memory("BLOCK_RAM")]] [[intel::numbanks(VEC)]] [[intel::max_replicates(2)]]
@@ -35,7 +35,11 @@ void fwd_ntt_kernel(sycl::queue& q,
             unsigned long local_roots[FPGA_NTT_SIZE];
             unsigned long local_precons[FPGA_NTT_SIZE];
 
+            // Compute necessary constants
             constexpr size_t numTwiddlePerWord = sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t);
+            unsigned64Bits_t modulus = modulus_acc[0];
+            unsigned64Bits_t coeff_mod = modulus;
+            unsigned64Bits_t twice_mod = modulus << 1;
 
             // Initialize Xm
             for (int i = 0; i < FPGA_NTT_SIZE / VEC; i++) {
@@ -54,14 +58,9 @@ void fwd_ntt_kernel(sycl::queue& q,
                 }
             }
 
-            unsigned64Bits_t modulus = modulus_acc[0];
-            size_t s_index = 0;  // Ensure proper indexing
-
+            size_t s_index = 0;
             for (int mb = 0; mb < miniBatchSize_acc[0]; mb++) {
-                unsigned64Bits_t coeff_mod = modulus;
-                unsigned64Bits_t twice_mod = modulus << 1;
                 unsigned64Bits_t t = (FPGA_NTT_SIZE >> 1);
-
                 unsigned int t_log = FPGA_NTT_SIZE_LOG - 1;
                 unsigned char Xm_val = 0;
 
@@ -87,9 +86,6 @@ void fwd_ntt_kernel(sycl::queue& q,
 
 #pragma unroll
                         for (int n = 0; n < VEC; n++) {
-                            size_t i = (k * VEC + n) >> t_log;
-                            size_t j = (k * VEC + n) & (t - 1);
-                            size_t j1 = i * 2 * t;
                             if (m == 1) {
                                 curX[n] = elements_in.data[n];
                                 curX[n + VEC] = elements_in.data[VEC + n];
@@ -101,7 +97,6 @@ void fwd_ntt_kernel(sycl::queue& q,
                             }
                         }
 
-                        // NTT computation and reduction
 #pragma unroll
                         for (int n = 0; n < VEC; n++) {
                             size_t i = (k * VEC + n) >> t_log;
@@ -137,7 +132,6 @@ void fwd_ntt_kernel(sycl::queue& q,
                             }
                         }
                     }
-
                     t >>= 1;
                     t_log -= 1;
                 }
@@ -145,6 +139,7 @@ void fwd_ntt_kernel(sycl::queue& q,
         });
     });
 }
+
 
 
 // Implement the fwd_ntt function
