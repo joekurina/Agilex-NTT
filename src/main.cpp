@@ -5,6 +5,8 @@
 #include <sycl/ext/intel/fpga_extensions.hpp>
 #include <dpc_common.hpp>
 #include <iostream>
+#include <fstream>  // Include for file handling
+
 
 #define FPGA_NTT_SIZE 16384 // FPGA_NTT_SIZE must be a power of 2
 
@@ -37,6 +39,9 @@ int main() {
 
     std::cout << "Initializing input data using host accessors..." << std::endl;
 
+    // Open a file to save the generated input data
+    std::ofstream input_file("generated_inputs.txt");
+
     // Initialize input data using a host accessor
     {
         host_accessor inData_acc(inData_buf, write_only);
@@ -47,20 +52,29 @@ int main() {
 
         miniBatchSize_acc[0] = numFrames;
 
-        for (size_t i = 0; i < dataSize / VEC; ++i) {
-            for (size_t j = 0; j < VEC; ++j) {
-                inData_acc[i].data[j] = i * VEC + j;
+        if (input_file.is_open()) {
+            for (size_t i = 0; i < dataSize / VEC; ++i) {
+                for (size_t j = 0; j < VEC; ++j) {
+                    inData_acc[i].data[j] = i * VEC + j;
+                    input_file << inData_acc[i].data[j] << std::endl;
+                }
             }
-        }
 
-        for (size_t i = 0; i < dataSize / (sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t)); ++i) {
-            for (size_t j = 0; j < sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t); ++j) {
-                twiddleFactors_acc[i].data[j] = i * j + 2;
-                barrettTwiddleFactors_acc[i].data[j] = i * j + 3;
+            for (size_t i = 0; i < dataSize / (sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t)); ++i) {
+                for (size_t j = 0; j < sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t); ++j) {
+                    twiddleFactors_acc[i].data[j] = i * j + 2;
+                    barrettTwiddleFactors_acc[i].data[j] = i * j + 3;
+                }
             }
-        }
 
-        modulus_acc[0] = 65537; // Example modulus
+            modulus_acc[0] = 65537; // Example modulus
+            input_file << "Modulus: " << modulus_acc[0] << std::endl;
+
+            input_file.close(); // Close the input file after writing
+            std::cout << "Input data saved to generated_inputs.txt." << std::endl;
+        } else {
+            std::cerr << "Unable to open file for writing input data." << std::endl;
+        }
     }
 
     std::cout << "Calling forward NTT kernel..." << std::endl;
@@ -72,17 +86,21 @@ int main() {
     q.wait();
     std::cout << "Output event completed." << std::endl;
 
-    std::cout << "Reading and printing output data..." << std::endl;
-    {
+    std::cout << "Saving output data to file..." << std::endl;
+    std::ofstream output_file("output_data.txt");  // Open file for writing
+
+    if (output_file.is_open()) {
         host_accessor outData_acc(outData_buf, read_only);
         for (size_t i = 0; i < dataSize / VEC; ++i) {
             for (size_t j = 0; j < VEC; ++j) {
-                std::cout << outData_acc[i].data[j] << std::endl;
+                output_file << outData_acc[i].data[j] << std::endl;
             }
         }
+        output_file.close();  // Close the file after writing
+        std::cout << "Output data saved to output_data.txt." << std::endl;
+    } else {
+        std::cerr << "Unable to open file for writing output data." << std::endl;
     }
-
-    std::cout << "Finished printing output data." << std::endl;
 
     return 0;
 }
