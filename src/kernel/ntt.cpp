@@ -35,7 +35,6 @@ void fwd_ntt_kernel(sycl::queue& q,
             unsigned long local_roots[FPGA_NTT_SIZE];
             unsigned long local_precons[FPGA_NTT_SIZE];
 
-            constexpr int computeUnitID = id;
             constexpr size_t numTwiddlePerWord = sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t);
 
             // Initialize Xm
@@ -56,6 +55,7 @@ void fwd_ntt_kernel(sycl::queue& q,
             }
 
             unsigned64Bits_t modulus = modulus_acc[0];
+            size_t s_index = 0;  // Ensure proper indexing
 
             for (int mb = 0; mb < miniBatchSize_acc[0]; mb++) {
                 unsigned64Bits_t coeff_mod = modulus;
@@ -64,7 +64,6 @@ void fwd_ntt_kernel(sycl::queue& q,
 
                 unsigned int t_log = FPGA_NTT_SIZE_LOG - 1;
                 unsigned char Xm_val = 0;
-                size_t s_index = 0;
 
                 for (unsigned int m = 1; m < FPGA_NTT_SIZE; m <<= 1) {
                     Xm_val++;
@@ -85,7 +84,6 @@ void fwd_ntt_kernel(sycl::queue& q,
                         WideVecType elements_in;
                         if (m == 1) {
                             elements_in = inData_acc[s_index];
-                            s_index++;
                         }
 
 #pragma unroll
@@ -157,10 +155,12 @@ void fwd_ntt_kernel(sycl::queue& q,
                     t >>= 1;
                     t_log -= 1;
                 }
+                s_index++;  // Move the increment here
             }
         });
     });
 }
+
 
 // Implement the fwd_ntt function
 void fwd_ntt(sycl::queue& q,
