@@ -1,69 +1,8 @@
 // ntt.cpp
 #include "ntt.h"
-#include "./utils/pipe_def_macros.hpp"
-#include "./utils/pipe_array.hpp"
+//#include "./utils/pipe_def_macros.hpp"
+//#include "./utils/pipe_array.hpp"
 #include "./utils/unroller.hpp"
-
-// Define the necessary constants and types
-#ifndef NUM_NTT_COMPUTE_UNITS
-#define NUM_NTT_COMPUTE_UNITS 1
-#else
-#pragma clang diagnostic warning "Compiling with external NUM_NTT_COMPUTE_UNITS"
-#endif
-
-#ifndef VEC
-#define VEC 8
-#endif
-#define REORDER 1
-#define PRINT_ROW_RESULT 0
-
-#ifndef FPGA_NTT_SIZE
-#define FPGA_NTT_SIZE 16384
-#else
-#pragma clang diagnostic warning "Compiling with external FPGA_NTT_SIZE"
-#endif
-
-#define LHIGH(num, type) \
-    ((type)(num) & ~((((type)1) << (sizeof(type) * 8 / 2)) - (type)1))
-#define LOW(num, type) \
-    ((type)(num) & ((((type)1) << (sizeof(type) * 8 / 2)) - (type)1))
-#define HIGH(num, type) ((type)(num) >> (sizeof(type) * 8 / 2))
-
-#define HEXL_FPGA_USE_64BIT_MULT
-#ifdef HEXL_FPGA_USE_64BIT_MULT
-#pragma clang diagnostic warning "Compiling with HEXL_FPGA_USE_64BIT_MULT"
-#endif
-
-typedef uint64_t unsigned64Bits_t;
-typedef unsigned int unsigned32Bits_t;
-typedef struct {
-    unsigned64Bits_t data[VEC * 2];
-} elements_in_t;
-
-typedef struct {
-    unsigned64Bits_t data[VEC * 2];
-} elements_out_t;
-
-typedef struct {
-    unsigned64Bits_t data[VEC * 2];
-} WideVecType;
-
-typedef struct {
-    unsigned64Bits_t data[64 / sizeof(unsigned64Bits_t)];
-} Wide64BytesType;
-
-
-#if 32 == FPGA_NTT_SIZE
-#define FPGA_NTT_SIZE_LOG 5
-#elif 1024 == FPGA_NTT_SIZE
-#define FPGA_NTT_SIZE_LOG 10
-#elif 8192 == FPGA_NTT_SIZE
-#define FPGA_NTT_SIZE_LOG 13
-#elif 16384 == FPGA_NTT_SIZE
-#define FPGA_NTT_SIZE_LOG 14
-#elif 32768 == FPGA_NTT_SIZE
-#define FPGA_NTT_SIZE_LOG 15
-#endif
 
 template <size_t idx>
 class FWD_NTT;
