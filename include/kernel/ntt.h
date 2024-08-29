@@ -4,15 +4,16 @@
 #include <CL/sycl.hpp>
 #include <sycl/ext/intel/fpga_extensions.hpp>
 
+// Define the necessary constants and types
 #ifndef FPGA_NTT_SIZE
 #define FPGA_NTT_SIZE 16384  // Example size
 #endif
 
-// Define the necessary constants and types
 #ifndef NUM_NTT_COMPUTE_UNITS
 #define NUM_NTT_COMPUTE_UNITS 1
 #else
-#pragma clang diagnostic warning "Compiling with external NUM_NTT_COMPUTE_UNITS"
+#pragma clang diagnostic ignored "-Wunknown-pragmas"
+#pragma clang diagnostic warning "-Wunknown-pragmas"
 #endif
 
 #ifndef VEC
@@ -20,12 +21,6 @@
 #endif
 #define REORDER 1
 #define PRINT_ROW_RESULT 0
-
-#ifndef FPGA_NTT_SIZE
-#define FPGA_NTT_SIZE 16384
-#else
-#pragma clang diagnostic warning "Compiling with external FPGA_NTT_SIZE"
-#endif
 
 #define LHIGH(num, type) \
     ((type)(num) & ~((((type)1) << (sizeof(type) * 8 / 2)) - (type)1))
@@ -35,18 +30,12 @@
 
 #define HEXL_FPGA_USE_64BIT_MULT
 #ifdef HEXL_FPGA_USE_64BIT_MULT
-#pragma clang diagnostic warning "Compiling with HEXL_FPGA_USE_64BIT_MULT"
+#pragma clang diagnostic ignored "-Wunknown-pragmas"
+#pragma clang diagnostic warning "-Wunknown-pragmas"
 #endif
 
 typedef uint64_t unsigned64Bits_t;
 typedef unsigned int unsigned32Bits_t;
-typedef struct {
-    unsigned64Bits_t data[VEC * 2];
-} elements_in_t;
-
-typedef struct {
-    unsigned64Bits_t data[VEC * 2];
-} elements_out_t;
 
 typedef struct {
     unsigned64Bits_t data[VEC * 2];
@@ -55,7 +44,6 @@ typedef struct {
 typedef struct {
     unsigned64Bits_t data[64 / sizeof(unsigned64Bits_t)];
 } Wide64BytesType;
-
 
 #if 32 == FPGA_NTT_SIZE
 #define FPGA_NTT_SIZE_LOG 5
@@ -67,6 +55,8 @@ typedef struct {
 #define FPGA_NTT_SIZE_LOG 14
 #elif 32768 == FPGA_NTT_SIZE
 #define FPGA_NTT_SIZE_LOG 15
+#else
+#error "Unsupported FPGA_NTT_SIZE"
 #endif
 
 using namespace cl::sycl;

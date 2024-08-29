@@ -10,7 +10,6 @@
 
 using namespace cl::sycl;
 
-
 int main() {
     // Create a device selector
 #if defined(FPGA_EMULATOR)
@@ -29,12 +28,12 @@ int main() {
     std::cout << "Initializing buffers..." << std::endl;
 
     // Create buffers for input and output data
-    buffer<WideVecType, 1> inData_buf(dataSize);
+    buffer<WideVecType, 1> inData_buf(dataSize / VEC);
     buffer<unsigned32Bits_t, 1> miniBatchSize_buf(1);
-    buffer<Wide64BytesType, 1> twiddleFactors_buf(dataSize);
-    buffer<Wide64BytesType, 1> barrettTwiddleFactors_buf(dataSize);
+    buffer<Wide64BytesType, 1> twiddleFactors_buf(dataSize / (sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t)));
+    buffer<Wide64BytesType, 1> barrettTwiddleFactors_buf(dataSize / (sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t)));
     buffer<unsigned64Bits_t, 1> modulus_buf(1);
-    buffer<WideVecType, 1> outData_buf(dataSize);
+    buffer<WideVecType, 1> outData_buf(dataSize / VEC);
 
     std::cout << "Initializing input data using host accessors..." << std::endl;
 
@@ -48,13 +47,19 @@ int main() {
 
         miniBatchSize_acc[0] = numFrames;
 
-        for (size_t i = 0; i < dataSize; ++i) {
+        for (size_t i = 0; i < dataSize / VEC; ++i) {
             for (size_t j = 0; j < VEC; ++j) {
-                inData_acc[i].data[j] = i + j;
+                inData_acc[i].data[j] = i * VEC + j;
             }
-            twiddleFactors_acc[i].data[0] = i + 2;
-            barrettTwiddleFactors_acc[i].data[0] = i + 3;
         }
+
+        for (size_t i = 0; i < dataSize / (sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t)); ++i) {
+            for (size_t j = 0; j < sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t); ++j) {
+                twiddleFactors_acc[i].data[j] = i * j + 2;
+                barrettTwiddleFactors_acc[i].data[j] = i * j + 3;
+            }
+        }
+
         modulus_acc[0] = 65537; // Example modulus
     }
 
@@ -70,7 +75,7 @@ int main() {
     std::cout << "Reading and printing output data..." << std::endl;
     {
         host_accessor outData_acc(outData_buf, read_only);
-        for (size_t i = 0; i < dataSize; ++i) {
+        for (size_t i = 0; i < dataSize / VEC; ++i) {
             for (size_t j = 0; j < VEC; ++j) {
                 std::cout << outData_acc[i].data[j] << std::endl;
             }

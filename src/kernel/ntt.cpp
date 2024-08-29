@@ -1,7 +1,5 @@
 // ntt.cpp
 #include "ntt.h"
-//#include "./utils/pipe_def_macros.hpp"
-//#include "./utils/pipe_array.hpp"
 #include "./utils/unroller.hpp"
 
 template <size_t idx>
@@ -52,8 +50,8 @@ void fwd_ntt_kernel(sycl::queue& q,
             for (int i = 0; i < FPGA_NTT_SIZE / numTwiddlePerWord; i++) {
 #pragma unroll
                 for (size_t j = 0; j < numTwiddlePerWord; ++j) {
-                    local_roots[i * numTwiddlePerWord + j] = twiddleFactors_acc[i * numTwiddlePerWord + j];
-                    local_precons[i * numTwiddlePerWord + j] = barrettTwiddleFactors_acc[i * numTwiddlePerWord + j];
+                    local_roots[i * numTwiddlePerWord + j] = twiddleFactors_acc[i].data[j];
+                    local_precons[i * numTwiddlePerWord + j] = barrettTwiddleFactors_acc[i].data[j];
                 }
             }
 
@@ -165,12 +163,21 @@ void fwd_ntt_kernel(sycl::queue& q,
 }
 
 // Implement the fwd_ntt function
-void fwd_ntt(sycl::queue& q) {
-    fwd_ntt_kernel<0>(q);
+void fwd_ntt(sycl::queue& q,
+             sycl::buffer<WideVecType, 1>& inData_buf,
+             sycl::buffer<unsigned32Bits_t, 1>& miniBatchSize_buf,
+             sycl::buffer<Wide64BytesType, 1>& twiddleFactors_buf,
+             sycl::buffer<Wide64BytesType, 1>& barrettTwiddleFactors_buf,
+             sycl::buffer<unsigned64Bits_t, 1>& modulus_buf,
+             sycl::buffer<WideVecType, 1>& outData_buf) {
+    fwd_ntt_kernel<0>(q, inData_buf, miniBatchSize_buf, twiddleFactors_buf, barrettTwiddleFactors_buf, modulus_buf, outData_buf);
 }
 
 // Explicit template instantiation for fwd_ntt_kernel
-template void fwd_ntt_kernel<0>(sycl::queue& q);
-
-class FWD_NTT_INPUT;
-class FWD_NTT_OUTPUT;
+template void fwd_ntt_kernel<0>(sycl::queue& q,
+                                sycl::buffer<WideVecType, 1>& inData_buf,
+                                sycl::buffer<unsigned32Bits_t, 1>& miniBatchSize_buf,
+                                sycl::buffer<Wide64BytesType, 1>& twiddleFactors_buf,
+                                sycl::buffer<Wide64BytesType, 1>& barrettTwiddleFactors_buf,
+                                sycl::buffer<unsigned64Bits_t, 1>& modulus_buf,
+                                sycl::buffer<WideVecType, 1>& outData_buf);
