@@ -71,11 +71,9 @@ void fwd_ntt_kernel(sycl::queue& q,
                     for (unsigned int k = 0; k < FPGA_NTT_SIZE / 2 / VEC; k++) {
                         [[intel::fpga_register]] unsigned long curX[VEC * 2];
                         [[intel::fpga_register]] unsigned long curX2[VEC * 2];
-                        [[intel::fpga_register]] unsigned long curX_rep[VEC * 2];
-                        [[intel::fpga_register]] unsigned long curX2_rep[VEC * 2];
 
-                        size_t i0 = (k * VEC + 0) >> t_log;
-                        size_t j0 = (k * VEC + 0) & (t - 1);
+                        size_t i0 = (k * VEC) >> t_log;
+                        size_t j0 = (k * VEC) & (t - 1);
                         size_t j10 = i0 * 2 * t;
                         bool b_same_vec = ((j10 + j0) / VEC) == ((j10 + j0 + t) / VEC);
                         size_t X_ind = (j10 + j0) / VEC;
@@ -84,6 +82,7 @@ void fwd_ntt_kernel(sycl::queue& q,
                         WideVecType elements_in;
                         if (m == 1) {
                             elements_in = inData_acc[s_index];
+                            s_index++;
                         }
 
 #pragma unroll
@@ -102,20 +101,6 @@ void fwd_ntt_kernel(sycl::queue& q,
                             }
                         }
 
-                        WideVecType elements_out;
-                        if (t == 1) {
-#pragma unroll
-                            for (int n = 0; n < VEC; n++) {
-                                const int cur_t = 1;
-                                const int Xn = n / cur_t * (2 * cur_t) + n % cur_t;
-                                const int Xnt = Xn + ((cur_t < VEC) ? cur_t : VEC);
-                                curX_rep[n] = curX[Xn];
-                                curX2_rep[n] = curX2[Xn];
-                                curX_rep[VEC + n] = curX[Xnt];
-                                curX2_rep[VEC + n] = curX2[Xnt];
-                            }
-                        }
-
                         // NTT computation and reduction
 #pragma unroll
                         for (int n = 0; n < VEC; n++) {
@@ -130,7 +115,10 @@ void fwd_ntt_kernel(sycl::queue& q,
 
                             unsigned long a = (Xm[(j1 + j) / VEC][(j1 + j) % VEC] == Xm_val - 1) ? curX[n + VEC] : curX2[n + VEC];
                             unsigned long b = W_precon;
-                            unsigned long Q = W_op * a - ((HIGH(a * b, unsigned long) * coeff_mod) >> 32);
+
+                            // Modular multiplication with reduction
+                            unsigned long mul = W_op * a;
+                            unsigned long Q = mul - ((HIGH(mul, unsigned long) * coeff_mod) >> 32);
 
                             X[(j1 + j) / VEC][(j1 + j) % VEC] = tx + Q;
                             X2[(j1 + j + t) / VEC][(j1 + j + t) % VEC] = tx + twice_mod - Q;
@@ -139,12 +127,10 @@ void fwd_ntt_kernel(sycl::queue& q,
                                 unsigned long val = tx + Q;
                                 if (val >= twice_mod) val -= twice_mod;
                                 if (val >= coeff_mod) val -= coeff_mod;
-                                elements_out.data[n * 2] = val;
 
                                 unsigned long val2 = tx + twice_mod - Q;
                                 if (val2 >= twice_mod) val2 -= twice_mod;
                                 if (val2 >= coeff_mod) val2 -= coeff_mod;
-                                elements_out.data[n * 2 + 1] = val2;
 
                                 outData_acc[s_index].data[n * 2] = val;
                                 outData_acc[s_index].data[n * 2 + 1] = val2;
@@ -155,7 +141,6 @@ void fwd_ntt_kernel(sycl::queue& q,
                     t >>= 1;
                     t_log -= 1;
                 }
-                s_index++;  // Move the increment here
             }
         });
     });
