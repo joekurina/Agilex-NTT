@@ -10,10 +10,6 @@
 
 using namespace cl::sycl;
 
-// Declare the FWD_NTT template class
-template <size_t idx>
-class FWD_NTT;
-
 // Declare the NTT functions with buffer-based signatures
 template <size_t id>
 void fwd_ntt_kernel(sycl::queue& q,
@@ -23,9 +19,9 @@ void fwd_ntt_kernel(sycl::queue& q,
                     buffer<uint64_t, 1>& outData_buf);
 
 void fwd_ntt(sycl::queue& q,
-             sycl::buffer<uint64_t, 1>& inData_buf,
-             sycl::buffer<uint64_t, 1>& twiddleFactors_buf,
-             sycl::buffer<uint64_t, 1>& modulus_buf,
-             sycl::buffer<uint64_t, 1>& outData_buf);
+             buffer<uint64_t, 1>& inData_buf,
+             buffer<uint64_t, 1>& twiddleFactors_buf,
+             buffer<uint64_t, 1>& modulus_buf,
+             buffer<uint64_t, 1>& outData_buf);
 
 #endif // NTT_H
