@@ -6,11 +6,24 @@
 #include <dpc_common.hpp>
 #include <iostream>
 #include <fstream>  // Include for file handling
-
+#include <cmath>
 
 #define FPGA_NTT_SIZE 16384 // FPGA_NTT_SIZE must be a power of 2
 
 using namespace cl::sycl;
+
+// Helper function to compute (base^exp) % mod
+unsigned long powmod(unsigned long base, unsigned long exp, unsigned long mod) {
+    unsigned long result = 1;
+    base = base % mod;
+    while (exp > 0) {
+        if (exp % 2 == 1)
+            result = (result * base) % mod;
+        exp = exp >> 1;
+        base = (base * base) % mod;
+    }
+    return result;
+}
 
 int main() {
     // Create a device selector
@@ -52,6 +65,9 @@ int main() {
 
         miniBatchSize_acc[0] = numFrames;
 
+        const unsigned long q = 65537;  // Example modulus
+        const unsigned long primitive_root = 3;  // Assume 3 is a primitive root mod q
+
         if (input_file.is_open()) {
             for (size_t i = 0; i < dataSize / VEC; ++i) {
                 for (size_t j = 0; j < VEC; ++j) {
@@ -60,14 +76,16 @@ int main() {
                 }
             }
 
+            // Initialize the twiddle factors
             for (size_t i = 0; i < dataSize / (sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t)); ++i) {
                 for (size_t j = 0; j < sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t); ++j) {
-                    twiddleFactors_acc[i].data[j] = i * j + 2;
-                    barrettTwiddleFactors_acc[i].data[j] = i * j + 3;
+                    unsigned long index = i * (sizeof(Wide64BytesType) / sizeof(unsigned64Bits_t)) + j;
+                    twiddleFactors_acc[i].data[j] = powmod(primitive_root, index, q);
+                    barrettTwiddleFactors_acc[i].data[j] = (twiddleFactors_acc[i].data[j] * powmod(primitive_root, index, q)) % q; // Example Barrett precomputation
                 }
             }
 
-            modulus_acc[0] = 65537; // Example modulus
+            modulus_acc[0] = q;
             input_file << "Modulus: " << modulus_acc[0] << std::endl;
 
             input_file.close(); // Close the input file after writing
