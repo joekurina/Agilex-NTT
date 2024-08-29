@@ -21,8 +21,8 @@ FPGA_DEVICE_A7  = de10_agilex:B2E2_8GBx4
 FPGA_DEVICE     = $(FPGA_DEVICE_A7)
 
 # Compile flags
-EMULATOR_FLAGS  = -fintelfpga -DFPGA_EMULATOR
-HARDWARE_FLAGS  = -fintelfpga -Xshardware -Xsboard=$(FPGA_DEVICE)
+EMULATOR_FLAGS  = -fintelfpga -DFPGA_EMULATOR -Xsv
+HARDWARE_FLAGS  = -fintelfpga -Xsv -Xshardware -Xsboard=$(FPGA_DEVICE)
 REPORT_FLAGS    = $(HARDWARE_FLAGS) -fsycl-link
 
 # Build for FPGA emulator
