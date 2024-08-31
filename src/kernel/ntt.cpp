@@ -17,25 +17,37 @@ void fwd_ntt_kernel(sycl::queue& q,
         h.parallel_for<FWD_NTT<id>>(
             sycl::nd_range<1>{sycl::range<1>(FPGA_NTT_SIZE), sycl::range<1>(64)}, [=](sycl::nd_item<1> item) {
                 const size_t tid = item.get_global_id(0);
-                const size_t N = data_acc.size(); // Get the size of the data using the updated method
+                const size_t N = data_acc.size();
                 const uint64_t modulus = modulus_acc[0];
 
-                // NTT with Cooley-Tukey Butterfly
-                for (size_t s = 1; s < N; s <<= 1) {
-                    size_t step = N / (2 * s);
-                    for (size_t j = tid; j < s; j += item.get_local_range(0)) {
-                        uint64_t w = twiddleFactors_acc[j * step];
+                // Cooley-Tukey NTT (bit-reverse input to standard order)
+                for (size_t t = 1; t < N; t <<= 1) {
+                    size_t m = t << 1;
 
-                        #pragma unroll 4
-                        for (size_t k = j; k < N; k += 2 * s) {
-                            uint64_t u = data_acc[k];
-                            uint64_t t = (data_acc[k + s] * w) % modulus;
-
-                            data_acc[k] = (u + t < modulus) ? u + t : u + t - modulus;
-                            data_acc[k + s] = (u >= t) ? u - t : u + modulus - t;
+                    // Handle the case where j=0, w_t^0 = 1
+                    for (size_t s = tid; s < N; s += item.get_local_range(0)) {
+                        if (s % m < t) {
+                            uint64_t x = data_acc[s + t];
+                            data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
+                            data_acc[s] = (data_acc[s] + x) % modulus;
                         }
                     }
+
                     item.barrier(sycl::access::fence_space::local_space);
+
+                    // General case: j > 0
+                    for (size_t j = 1; j < t; j++) {
+                        uint64_t w = twiddleFactors_acc[t + j];
+
+                        for (size_t s = tid; s < N; s += item.get_local_range(0)) {
+                            if (s % m == j) {
+                                uint64_t x = (data_acc[s + t] * w) % modulus;
+                                data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
+                                data_acc[s] = (data_acc[s] + x) % modulus;
+                            }
+                        }
+                        item.barrier(sycl::access::fence_space::local_space);
+                    }
                 }
 
                 // Write results to outData_acc
