@@ -4,13 +4,15 @@ template <size_t id>
 void fwd_ntt_kernel(sycl::queue& q,
                     sycl::buffer<uint64_t, 1>& data_buf,
                     sycl::buffer<uint64_t, 1>& twiddleFactors_buf,
-                    sycl::buffer<uint64_t, 1>& modulus_buf) {
+                    sycl::buffer<uint64_t, 1>& modulus_buf,
+                    sycl::buffer<uint64_t, 1>& outData_buf) {
 
     q.submit([&](sycl::handler& h) {
         // Accessors
         auto data_acc = data_buf.get_access<sycl::access::mode::read_write>(h);
         auto twiddleFactors_acc = twiddleFactors_buf.get_access<sycl::access::mode::read>(h);
         auto modulus_acc = modulus_buf.get_access<sycl::access::mode::read>(h);
+        auto outData_acc = outData_buf.get_access<sycl::access::mode::write>(h);
 
         // Local memory for the twiddle factors
         sycl::local_accessor<uint64_t, 1> twiddles_local(sycl::range<1>(FPGA_NTT_SIZE), h);
@@ -44,6 +46,11 @@ void fwd_ntt_kernel(sycl::queue& q,
                     }
                     item.barrier(sycl::access::fence_space::local_space);
                 }
+
+                // Write results to outData_acc
+                for (size_t i = tid; i < N; i += item.get_local_range(0)) {
+                    outData_acc[i] = data_acc[i];
+                }
             });
     });
 }
@@ -52,4 +59,5 @@ void fwd_ntt_kernel(sycl::queue& q,
 template void fwd_ntt_kernel<0>(sycl::queue& q,
                                 sycl::buffer<uint64_t, 1>& data_buf,
                                 sycl::buffer<uint64_t, 1>& twiddleFactors_buf,
-                                sycl::buffer<uint64_t, 1>& modulus_buf);
+                                sycl::buffer<uint64_t, 1>& modulus_buf,
+                                sycl::buffer<uint64_t, 1>& outData_buf);
