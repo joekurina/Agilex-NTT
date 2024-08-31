@@ -1,12 +1,14 @@
 // main.cpp
 
 #include "kernel/ntt.h"
+#include "naive_ntt.h" // Include the naive NTT implementation header
 #include <CL/sycl.hpp>
 #include <sycl/ext/intel/fpga_extensions.hpp>
 #include <dpc_common.hpp>
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <vector>
 
 #define FPGA_NTT_SIZE 16384 // FPGA_NTT_SIZE must be a power of 2
 
@@ -23,6 +25,18 @@ unsigned long powmod(unsigned long base, unsigned long exp, unsigned long mod) {
         base = (base * base) % mod;
     }
     return result;
+}
+
+// Function to compare two arrays
+bool compare_arrays(const std::vector<uint64_t>& a, const std::vector<uint64_t>& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (a[i] != b[i]) {
+            std::cout << "Mismatch at index " << i << ": " << a[i] << " != " << b[i] << std::endl;
+            return false;
+        }
+    }
+    return true;
 }
 
 int main() {
@@ -53,6 +67,11 @@ int main() {
     // Open a file to save the generated input data
     std::ofstream input_file("generated_inputs.txt");
 
+    // Vector to store the input data for comparison later
+    std::vector<uint64_t> input_data(dataSize);
+    std::vector<uint64_t> twiddle_factors(dataSize);
+    std::vector<uint64_t> output_data(dataSize);
+
     {
         host_accessor inData_acc(inData_buf, write_only);
         host_accessor twiddleFactors_acc(twiddleFactors_buf, write_only);
@@ -61,11 +80,13 @@ int main() {
         if (input_file.is_open()) {
             for (size_t i = 0; i < dataSize; ++i) {
                 inData_acc[i] = i;
+                input_data[i] = i;
                 input_file << inData_acc[i] << std::endl;
             }
 
             for (size_t i = 0; i < dataSize; ++i) {
                 twiddleFactors_acc[i] = powmod(primitive_root, i, q_modulus);
+                twiddle_factors[i] = twiddleFactors_acc[i];
             }
 
             modulus_acc[0] = q_modulus;
@@ -94,11 +115,22 @@ int main() {
         host_accessor outData_acc(outData_buf, read_only);
         for (size_t i = 0; i < dataSize; ++i) {
             output_file << outData_acc[i] << std::endl;
+            output_data[i] = outData_acc[i];
         }
         output_file.close();
         std::cout << "Output data saved to output_data.txt." << std::endl;
     } else {
         std::cerr << "Unable to open file for writing output data." << std::endl;
+    }
+
+    // Verification using naive NTT
+    std::cout << "Verifying output using naive NTT implementation..." << std::endl;
+    ntt_ct_rev2std_naive(reinterpret_cast<int32_t*>(input_data.data()), dataSize, reinterpret_cast<uint16_t*>(twiddle_factors.data()), q_modulus);
+
+    if (compare_arrays(input_data, output_data)) {
+        std::cout << "Verification successful: FPGA NTT output matches the naive NTT output." << std::endl;
+    } else {
+        std::cout << "Verification failed: FPGA NTT output does not match the naive NTT output." << std::endl;
     }
 
     return 0;
