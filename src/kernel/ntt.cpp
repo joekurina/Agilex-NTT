@@ -1,9 +1,6 @@
-// ntt.cpp
 #include "ntt.h"
 
-template <size_t idx>
-class FWD_NTT;
-
+template <size_t id>
 void fwd_ntt_kernel(sycl::queue& q,
                     sycl::buffer<uint64_t, 1>& data_buf,
                     sycl::buffer<uint64_t, 1>& twiddleFactors_buf,
@@ -15,8 +12,8 @@ void fwd_ntt_kernel(sycl::queue& q,
         auto twiddleFactors_acc = twiddleFactors_buf.get_access<sycl::access::mode::read>(h);
         auto modulus_acc = modulus_buf.get_access<sycl::access::mode::read>(h);
 
-        // Local memory for the twiddle factors (assuming small enough to fit)
-        auto twiddles_local = sycl::local_accessor<uint64_t, 1>(FPGA_NTT_SIZE, h);
+        // Local memory for the twiddle factors
+        sycl::local_accessor<uint64_t, 1> twiddles_local(sycl::range<1>(FPGA_NTT_SIZE), h);
 
         h.parallel_for<FWD_NTT<id>>(
             sycl::nd_range<1>{sycl::range<1>(FPGA_NTT_SIZE), sycl::range<1>(64)}, [=](sycl::nd_item<1> item) {
@@ -36,7 +33,7 @@ void fwd_ntt_kernel(sycl::queue& q,
                     for (size_t j = tid; j < s; j += item.get_local_range(0)) {
                         uint64_t w = twiddles_local[j * step];
                         
-                        #pragma unroll 4 // Unroll the loop to increase ILP
+                        #pragma unroll 4
                         for (size_t k = j; k < N; k += 2 * s) {
                             uint64_t u = data_acc[k];
                             uint64_t t = (data_acc[k + s] * w) % modulus;
@@ -45,15 +42,14 @@ void fwd_ntt_kernel(sycl::queue& q,
                             data_acc[k + s] = (u >= t) ? u - t : u + modulus - t;
                         }
                     }
-                    item.barrier(sycl::access::fence_space::local_space); // Sync threads within work-group
+                    item.barrier(sycl::access::fence_space::local_space);
                 }
             });
     });
 }
 
-
+// Explicit instantiation
 template void fwd_ntt_kernel<0>(sycl::queue& q,
-                                sycl::buffer<uint64_t, 1>& inData_buf,
+                                sycl::buffer<uint64_t, 1>& data_buf,
                                 sycl::buffer<uint64_t, 1>& twiddleFactors_buf,
-                                sycl::buffer<uint64_t, 1>& modulus_buf,
-                                sycl::buffer<uint64_t, 1>& outData_buf);
+                                sycl::buffer<uint64_t, 1>& modulus_buf);
