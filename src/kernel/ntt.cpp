@@ -14,45 +14,37 @@ void fwd_ntt_kernel(sycl::queue& q,
         auto modulus_acc = modulus_buf.get_access<sycl::access::mode::read>(h);
         auto outData_acc = outData_buf.get_access<sycl::access::mode::write>(h);
 
-        h.parallel_for<FWD_NTT<id>>(
-            sycl::nd_range<1>{sycl::range<1>(FPGA_NTT_SIZE), sycl::range<1>(64)}, [=](sycl::nd_item<1> item) {
-                const size_t tid = item.get_global_id(0);
-                const size_t N = data_acc.size();
-                const uint64_t modulus = modulus_acc[0];
+        h.single_task<FWD_NTT<id>>([=]() {
+            const size_t N = data_acc.size();
+            const uint64_t modulus = modulus_acc[0];
 
-                // Cooley-Tukey NTT (bit-reverse input to standard order)
-                for (size_t t = 1; t < N; t <<= 1) {
-                    size_t m = t << 1;
+            for (size_t t = 1; t < N; t <<= 1) {
+                size_t m = t << 1;
 
-                    // Handle the case where j=0, w_t^0 = 1
-                    for (size_t s = tid; s < N; s += item.get_local_range(0)) {
-                        if (s % m < t) {
-                            uint64_t x = data_acc[s + t];
-                            data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
-                            data_acc[s] = (data_acc[s] + x) % modulus;
-                        }
-                    }
-
-                    item.barrier(sycl::access::fence_space::local_space);
-
-                    // General case: j > 0
-                    for (size_t j = 1; j < t; j++) {
-                        uint64_t w = twiddleFactors_acc[t + j];
-
-                        for (size_t s = tid; s < N; s += item.get_local_range(0)) {
-                            if (s % m == j) {
-                                uint64_t x = (data_acc[s + t] * w) % modulus;
-                                data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
-                                data_acc[s] = (data_acc[s] + x) % modulus;
-                            }
-                        }
-                        item.barrier(sycl::access::fence_space::local_space);
-                    }
+                // First loop: j = 0 so w_t^j = 1
+                for (size_t s = 0; s < N; s += m) {
+                    uint64_t x = data_acc[s + t];
+                    data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
+                    data_acc[s] = (data_acc[s] + x) % modulus;
                 }
 
-                // Write results to outData_acc
-                outData_acc[tid] = data_acc[tid];
-            });
+                // General case: j > 0
+                for (size_t j = 1; j < t; j++) {
+                    uint64_t w = twiddleFactors_acc[t + j];
+
+                    for (size_t s = j; s < N; s += m) {
+                        uint64_t x = (data_acc[s + t] * w) % modulus;
+                        data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
+                        data_acc[s] = (data_acc[s] + x) % modulus;
+                    }
+                }
+            }
+
+            // Write results to outData_acc
+            for (size_t i = 0; i < N; i++) {
+                outData_acc[i] = data_acc[i];
+            }
+        });
     });
 }
 
