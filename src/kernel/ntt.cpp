@@ -14,26 +14,17 @@ void fwd_ntt_kernel(sycl::queue& q,
         auto modulus_acc = modulus_buf.get_access<sycl::access::mode::read>(h);
         auto outData_acc = outData_buf.get_access<sycl::access::mode::write>(h);
 
-        // Local memory for the twiddle factors (assuming small enough to fit)
-        sycl::local_accessor<uint64_t, 1> twiddles_local(sycl::range<1>(FPGA_NTT_SIZE), h);
-
         h.parallel_for<FWD_NTT<id>>(
             sycl::nd_range<1>{sycl::range<1>(FPGA_NTT_SIZE), sycl::range<1>(64)}, [=](sycl::nd_item<1> item) {
-                const size_t tid = item.get_local_id(0);
-                const size_t N = data_acc.size();
+                const size_t tid = item.get_global_id(0);
+                const size_t N = data_acc.get_count(); // Get the size of the data
                 const uint64_t modulus = modulus_acc[0];
-
-                // Load twiddle factors into local memory
-                if (tid < N) {
-                    twiddles_local[tid] = twiddleFactors_acc[tid];
-                }
-                item.barrier(sycl::access::fence_space::local_space);
 
                 // NTT with Cooley-Tukey Butterfly
                 for (size_t s = 1; s < N; s <<= 1) {
                     size_t step = N / (2 * s);
                     for (size_t j = tid; j < s; j += item.get_local_range(0)) {
-                        uint64_t w = twiddles_local[j * step];
+                        uint64_t w = twiddleFactors_acc[j * step];
 
                         #pragma unroll 4
                         for (size_t k = j; k < N; k += 2 * s) {
@@ -48,9 +39,7 @@ void fwd_ntt_kernel(sycl::queue& q,
                 }
 
                 // Write results to outData_acc
-                for (size_t i = tid; i < N; i += item.get_local_range(0)) {
-                    outData_acc[i] = data_acc[i];
-                }
+                outData_acc[tid] = data_acc[tid];
             });
     });
 }
