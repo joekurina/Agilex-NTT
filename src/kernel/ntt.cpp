@@ -34,7 +34,7 @@ void fwd_ntt_kernel(sycl::queue& q,
                     size_t step = N / (2 * s);
                     for (size_t j = tid; j < s; j += item.get_local_range(0)) {
                         uint64_t w = twiddles_local[j * step];
-                        
+
                         #pragma unroll 4
                         for (size_t k = j; k < N; k += 2 * s) {
                             uint64_t u = data_acc[k];
