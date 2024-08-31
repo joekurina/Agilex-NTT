@@ -14,8 +14,8 @@ void fwd_ntt_kernel(sycl::queue& q,
         auto modulus_acc = modulus_buf.get_access<sycl::access::mode::read>(h);
         auto outData_acc = outData_buf.get_access<sycl::access::mode::write>(h);
 
-        // Local memory for the twiddle factors (local memory is shared within a workgroup)
-        sycl::local_accessor<uint64_t, 1> twiddles_local(FPGA_NTT_SIZE, h);
+        // Local memory for the twiddle factors (assuming small enough to fit)
+        sycl::local_accessor<uint64_t, 1> twiddles_local(sycl::range<1>(FPGA_NTT_SIZE), h);
 
         h.parallel_for<FWD_NTT<id>>(
             sycl::nd_range<1>{sycl::range<1>(FPGA_NTT_SIZE), sycl::range<1>(64)}, [=](sycl::nd_item<1> item) {
