@@ -107,7 +107,8 @@ extern void mulntt_ct_rev2std_naive(int32_t *a, uint32_t n, const uint16_t *p, i
  *
  * - output: NTT(a) in bit-reverse order
  */
-extern void ntt_ct_std2rev_naive(int32_t *a, uint32_t n, const uint16_t *p, int32_t q);
+//extern void ntt_ct_std2rev_naive(int32_t *a, uint32_t n, const uint16_t *p, int32_t q);
+extern void ntt_ct_std2rev_naive(int64_t *a, uint64_t n, const uint64_t *p, uint64_t q);
 
 /*
  * Version 5: combined NTT and product by powers of psi

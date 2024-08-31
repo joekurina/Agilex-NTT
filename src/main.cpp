@@ -14,25 +14,14 @@
 
 using namespace cl::sycl;
 
-// Helper function to compute (base^exp) % mod
-unsigned long powmod(unsigned long base, unsigned long exp, unsigned long mod) {
-    unsigned long result = 1;
-    base = base % mod;
-    while (exp > 0) {
-        if (exp % 2 == 1)
-            result = (result * base) % mod;
-        exp = exp >> 1;
-        base = (base * base) % mod;
-    }
-    return result;
-}
-
 // Function to compare two arrays
-bool compare_arrays(const std::vector<int32_t>& a, const std::vector<int32_t>& b) {
+bool compare_arrays(const std::vector<uint64_t>& a, const std::vector<uint64_t>& b, uint64_t q_modulus) {
     if (a.size() != b.size()) return false;
     for (size_t i = 0; i < a.size(); ++i) {
-        if (a[i] != b[i]) {
-            std::cout << "Mismatch at index " << i << ": " << a[i] << " != " << b[i] << std::endl;
+        uint64_t a_mod = (a[i] % q_modulus + q_modulus) % q_modulus;  // Adjust for modulus
+        uint64_t b_mod = (b[i] % q_modulus + q_modulus) % q_modulus;  // Adjust for modulus
+        if (a_mod != b_mod) {
+            std::cout << "Mismatch at index " << i << ": " << a_mod << " != " << b_mod << std::endl;
             return false;
         }
     }
@@ -51,16 +40,16 @@ int main() {
     sycl::queue q(device_selector, dpc_common::exception_handler);
 
     const size_t dataSize = FPGA_NTT_SIZE;
-    const int32_t q_modulus = 65537;  // Example modulus
-    const uint16_t primitive_root = 3;  // Assume 3 is a primitive root mod q
+    const uint64_t q_modulus = 65537;  // Example modulus
+    const uint64_t primitive_root = 3;  // Assume 3 is a primitive root mod q
 
     std::cout << "Initializing buffers..." << std::endl;
 
     // Create buffers for input, twiddle factors, and output data
-    buffer<int32_t, 1> inData_buf(dataSize);
-    buffer<uint16_t, 1> twiddleFactors_buf(dataSize);
-    buffer<int32_t, 1> modulus_buf(1);
-    buffer<int32_t, 1> outData_buf(dataSize);
+    buffer<uint64_t, 1> inData_buf(dataSize);
+    buffer<uint64_t, 1> twiddleFactors_buf(dataSize);
+    buffer<uint64_t, 1> modulus_buf(1);
+    buffer<uint64_t, 1> outData_buf(dataSize);
 
     std::cout << "Initializing input data and twiddle factors..." << std::endl;
 
@@ -68,9 +57,9 @@ int main() {
     std::ofstream input_file("generated_inputs.txt");
 
     // Vector to store the input data for comparison later
-    std::vector<int32_t> input_data(dataSize);
-    std::vector<uint16_t> twiddle_factors(dataSize);
-    std::vector<int32_t> output_data(dataSize);
+    std::vector<uint64_t> input_data(dataSize);
+    std::vector<uint64_t> twiddle_factors(dataSize);
+    std::vector<uint64_t> output_data(dataSize);
 
     {
         host_accessor inData_acc(inData_buf, write_only);
@@ -125,9 +114,9 @@ int main() {
 
     // Verification using naive NTT
     std::cout << "Verifying output using naive NTT implementation..." << std::endl;
-    ntt_ct_rev2std_naive(input_data.data(), dataSize, twiddle_factors.data(), q_modulus);
+    ntt_ct_rev2std_naive(reinterpret_cast<int64_t*>(input_data.data()), dataSize, reinterpret_cast<uint16_t*>(twiddle_factors.data()), q_modulus);
 
-    if (compare_arrays(input_data, output_data)) {
+    if (compare_arrays(input_data, output_data, q_modulus)) {
         std::cout << "Verification successful: FPGA NTT output matches the naive NTT output." << std::endl;
     } else {
         std::cout << "Verification failed: FPGA NTT output does not match the naive NTT output." << std::endl;

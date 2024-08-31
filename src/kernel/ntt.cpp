@@ -3,10 +3,10 @@
 
 template <size_t id>
 void fwd_ntt_kernel(sycl::queue& q,
-                    buffer<int32_t, 1>& data_buf,
-                    buffer<uint16_t, 1>& twiddleFactors_buf,
-                    buffer<int32_t, 1>& modulus_buf,
-                    buffer<int32_t, 1>& outData_buf) {
+                    sycl::buffer<uint64_t, 1>& data_buf,
+                    sycl::buffer<uint64_t, 1>& twiddleFactors_buf,
+                    sycl::buffer<uint64_t, 1>& modulus_buf,
+                    sycl::buffer<uint64_t, 1>& outData_buf) {
 
     q.submit([&](sycl::handler& h) {
         // Accessors
@@ -17,24 +17,24 @@ void fwd_ntt_kernel(sycl::queue& q,
 
         h.single_task<FWD_NTT<id>>([=]() {
             const size_t N = data_acc.size();
-            const int32_t modulus = modulus_acc[0];
+            const uint64_t modulus = modulus_acc[0];
 
             for (size_t t = 1; t < N; t <<= 1) {
                 size_t m = t << 1;
 
                 // First loop: j = 0 so w_t^j = 1
                 for (size_t s = 0; s < N; s += m) {
-                    int32_t x = data_acc[s + t];
+                    uint64_t x = data_acc[s + t];
                     data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
                     data_acc[s] = (data_acc[s] + x) % modulus;
                 }
 
                 // General case: j > 0
                 for (size_t j = 1; j < t; j++) {
-                    uint16_t w = twiddleFactors_acc[t + j];
+                    uint64_t w = twiddleFactors_acc[t + j];
 
                     for (size_t s = j; s < N; s += m) {
-                        int32_t x = (data_acc[s + t] * w) % modulus;
+                        uint64_t x = (data_acc[s + t] * w) % modulus;
                         data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
                         data_acc[s] = (data_acc[s] + x) % modulus;
                     }
@@ -51,7 +51,7 @@ void fwd_ntt_kernel(sycl::queue& q,
 
 // Explicit template instantiation for the kernel
 template void fwd_ntt_kernel<0>(sycl::queue& q,
-                                buffer<int32_t, 1>& data_buf,
-                                buffer<uint16_t, 1>& twiddleFactors_buf,
-                                buffer<int32_t, 1>& modulus_buf,
-                                buffer<int32_t, 1>& outData_buf);
+                                sycl::buffer<uint64_t, 1>& data_buf,
+                                sycl::buffer<uint64_t, 1>& twiddleFactors_buf,
+                                sycl::buffer<uint64_t, 1>& modulus_buf,
+                                sycl::buffer<uint64_t, 1>& outData_buf);

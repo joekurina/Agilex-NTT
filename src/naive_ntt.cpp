@@ -194,19 +194,19 @@ void mulntt_ct_rev2std_naive(int32_t *a, uint32_t n, const uint16_t *p, int32_t 
 /*
  * Version 4:
  * - input: a[0 ... n-1] in standard order
- * - p: constant array ow powers of omega
+ * - p: constant array of powers of omega
  *   such that p[t + j] = omega^(n/2t)^ bitrev(j)
- *   for t=1, 2. 4, ..., n/2
+ *   for t=1, 2, 4, ..., n/2
  *   and j=0, ..., t-1.
  *
  * - output: NTT(a) in bit-reverse order
  */
-void ntt_ct_std2rev_naive(int32_t *a, uint32_t n, const uint16_t *p, int32_t q) {
-  uint32_t j, s, t, u, d;
-  int32_t x, w;
+void ntt_ct_std2rev_naive(int64_t *a, uint64_t n, const uint64_t *p, uint64_t q) {
+  uint64_t j, s, t, u, d;
+  int64_t x, w;
 
   d = n;
-  for (t=1; t<n; t <<= 1) {
+  for (t = 1; t < n; t <<= 1) {
     d >>= 1;
     /*
      * Invariant: d * 2t = n.
@@ -218,20 +218,20 @@ void ntt_ct_std2rev_naive(int32_t *a, uint32_t n, const uint16_t *p, int32_t q) 
      * The w_t for this round is omega^(n/2t).
      * and w_t,j is w_t^bitrev(j)
      */
-    // first loop: j=0, bitrev(j) = 0
-    for (s=0; s<d; s ++) {
+    // first loop: j = 0, bitrev(j) = 0
+    for (s = 0; s < d; s++) {
       x = a[s + d];
       a[s + d] = (a[s] - x) % q;
       a[s] = (a[s] + x) % q;
     }
     u = 0;
-    for (j=1; j<t; j++) {
+    for (j = 1; j < t; j++) {
       w = p[t + j]; // w_t^bitrev(j)
       u += 2 * d;   // u = 2 * d * j
-      for (s=u; s<u+d; s++) {
-        x = a[s + d] * w;
+      for (s = u; s < u + d; s++) {
+        x = (a[s + d] * w) % q;
         a[s + d] = (a[s] - x) % q;
-        a[s] = (a[s] +  x) % q;
+        a[s] = (a[s] + x) % q;
       }
     }
   }
