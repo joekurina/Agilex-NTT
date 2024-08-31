@@ -17,7 +17,7 @@ void fwd_ntt_kernel(sycl::queue& q,
         h.parallel_for<FWD_NTT<id>>(
             sycl::nd_range<1>{sycl::range<1>(FPGA_NTT_SIZE), sycl::range<1>(64)}, [=](sycl::nd_item<1> item) {
                 const size_t tid = item.get_global_id(0);
-                const size_t N = data_acc.get_count(); // Get the size of the data
+                const size_t N = data_acc.size(); // Get the size of the data using the updated method
                 const uint64_t modulus = modulus_acc[0];
 
                 // NTT with Cooley-Tukey Butterfly
