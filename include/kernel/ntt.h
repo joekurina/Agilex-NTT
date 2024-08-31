@@ -15,9 +15,9 @@ class FWD_NTT;
 
 template <size_t id>
 void fwd_ntt_kernel(sycl::queue& q,
-                    buffer<uint32_t, 1>& data_buf,
+                    buffer<int32_t, 1>& data_buf,
                     buffer<uint16_t, 1>& twiddleFactors_buf,
-                    buffer<uint32_t, 1>& modulus_buf,
-                    buffer<uint32_t, 1>& outData_buf);
+                    buffer<int32_t, 1>& modulus_buf,
+                    buffer<int32_t, 1>& outData_buf);
 
 #endif // NTT_H

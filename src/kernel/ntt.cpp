@@ -1,11 +1,12 @@
+// ntt.cpp
 #include "ntt.h"
 
 template <size_t id>
 void fwd_ntt_kernel(sycl::queue& q,
-                    sycl::buffer<int32_t, 1>& data_buf,                 // Change to int32_t
-                    sycl::buffer<uint16_t, 1>& twiddleFactors_buf,      // Change to uint16_t
-                    sycl::buffer<int32_t, 1>& modulus_buf,              // Change to int32_t
-                    sycl::buffer<int32_t, 1>& outData_buf) {            // Change to int32_t
+                    buffer<int32_t, 1>& data_buf,
+                    buffer<uint16_t, 1>& twiddleFactors_buf,
+                    buffer<int32_t, 1>& modulus_buf,
+                    buffer<int32_t, 1>& outData_buf) {
 
     q.submit([&](sycl::handler& h) {
         // Accessors
@@ -16,25 +17,25 @@ void fwd_ntt_kernel(sycl::queue& q,
 
         h.single_task<FWD_NTT<id>>([=]() {
             const size_t N = data_acc.size();
-            const int32_t modulus = modulus_acc[0];  // Use int32_t for modulus
+            const int32_t modulus = modulus_acc[0];
 
             for (size_t t = 1; t < N; t <<= 1) {
                 size_t m = t << 1;
 
                 // First loop: j = 0 so w_t^j = 1
                 for (size_t s = 0; s < N; s += m) {
-                    int32_t x = data_acc[s + t];  // Use int32_t for x
-                    data_acc[s + t] = (data_acc[s] - x) % modulus;
+                    int32_t x = data_acc[s + t];
+                    data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
                     data_acc[s] = (data_acc[s] + x) % modulus;
                 }
 
                 // General case: j > 0
                 for (size_t j = 1; j < t; j++) {
-                    int32_t w = twiddleFactors_acc[t + j];  // Use int32_t for w
+                    uint16_t w = twiddleFactors_acc[t + j];
 
                     for (size_t s = j; s < N; s += m) {
                         int32_t x = (data_acc[s + t] * w) % modulus;
-                        data_acc[s + t] = (data_acc[s] - x) % modulus;
+                        data_acc[s + t] = (data_acc[s] + modulus - x) % modulus;
                         data_acc[s] = (data_acc[s] + x) % modulus;
                     }
                 }
@@ -48,10 +49,9 @@ void fwd_ntt_kernel(sycl::queue& q,
     });
 }
 
-
-// Explicit instantiation
+// Explicit template instantiation for the kernel
 template void fwd_ntt_kernel<0>(sycl::queue& q,
-                                sycl::buffer<uint32_t, 1>& data_buf,
-                                sycl::buffer<uint16_t, 1>& twiddleFactors_buf,
-                                sycl::buffer<uint32_t, 1>& modulus_buf,
-                                sycl::buffer<uint32_t, 1>& outData_buf);
+                                buffer<int32_t, 1>& data_buf,
+                                buffer<uint16_t, 1>& twiddleFactors_buf,
+                                buffer<int32_t, 1>& modulus_buf,
+                                buffer<int32_t, 1>& outData_buf);
