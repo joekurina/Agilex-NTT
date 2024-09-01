@@ -41,38 +41,26 @@ bool compare_arrays(const std::vector<uint64_t>& a, const std::vector<uint64_t>&
     return true;
 }
 
-// Function to initialize data and twiddle factors
+// Function to initialize input data and twiddle factors
 void initialize_data(size_t dataSize, uint64_t q_modulus, uint64_t primitive_root, 
-                     std::vector<uint64_t>& input_data, std::vector<uint64_t>& twiddle_factors, 
-                     sycl::buffer<uint64_t, 1>& inData_buf, sycl::buffer<uint64_t, 1>& twiddleFactors_buf, 
-                     sycl::buffer<uint64_t, 1>& modulus_buf) {
+                     std::vector<uint64_t>& input_data, std::vector<uint64_t>& twiddle_factors) {
     std::ofstream input_file("input.txt");
 
-    {
-        sycl::host_accessor inData_acc(inData_buf, sycl::write_only);
-        sycl::host_accessor twiddleFactors_acc(twiddleFactors_buf, sycl::write_only);
-        sycl::host_accessor modulus_acc(modulus_buf, sycl::write_only);
-
-        if (input_file.is_open()) {
-            for (size_t i = 0; i < dataSize; ++i) {
-                inData_acc[i] = i;
-                input_data[i] = i;
-                input_file << inData_acc[i] << std::endl;
-            }
-
-            for (size_t i = 0; i < dataSize; ++i) {
-                twiddleFactors_acc[i] = powmod(primitive_root, i, q_modulus);
-                twiddle_factors[i] = twiddleFactors_acc[i];
-            }
-
-            modulus_acc[0] = q_modulus;
-            input_file << "Modulus: " << modulus_acc[0] << std::endl;
-
-            input_file.close();
-            std::cout << "Input data saved to input.txt." << std::endl;
-        } else {
-            std::cerr << "Unable to open file for writing input data." << std::endl;
+    if (input_file.is_open()) {
+        for (size_t i = 0; i < dataSize; ++i) {
+            input_data[i] = i;
+            input_file << input_data[i] << std::endl;
         }
+
+        for (size_t i = 0; i < dataSize; ++i) {
+            twiddle_factors[i] = powmod(primitive_root, i, q_modulus);
+        }
+
+        input_file << "Modulus: " << q_modulus << std::endl;
+        input_file.close();
+        std::cout << "Input data saved to input.txt." << std::endl;
+    } else {
+        std::cerr << "Unable to open file for writing input data." << std::endl;
     }
 }
 
@@ -112,9 +100,16 @@ void radix4_ntt_cpu(size_t dataSize, uint64_t q_modulus,
 
 // Function to perform forward NTT on the FPGA
 void fpga_ntt(sycl::queue& q, size_t dataSize, 
-                       sycl::buffer<uint64_t, 1>& inData_buf, sycl::buffer<uint64_t, 1>& twiddleFactors_buf, 
-                       sycl::buffer<uint64_t, 1>& modulus_buf, sycl::buffer<uint64_t, 1>& outData_buf, 
+                       const std::vector<uint64_t>& input_data,
+                       const std::vector<uint64_t>& twiddle_factors,
+                       uint64_t q_modulus,
+                       sycl::buffer<uint64_t, 1>& outData_buf, 
                        std::vector<uint64_t>& output_data) {
+    // Create buffers
+    sycl::buffer<uint64_t, 1> inData_buf(input_data.data(), dataSize);
+    sycl::buffer<uint64_t, 1> twiddleFactors_buf(twiddle_factors.data(), dataSize);
+    sycl::buffer<uint64_t, 1> modulus_buf(&q_modulus, 1);
+
     // Perform NTT computation on FPGA
     fwd_ntt_kernel<0>(q, inData_buf, twiddleFactors_buf, modulus_buf, outData_buf);
     q.wait();
@@ -154,15 +149,8 @@ int main() {
     std::vector<uint64_t> twiddle_factors(dataSize);
     std::vector<uint64_t> output_data(dataSize);
 
-    // Create buffers
-    sycl::buffer<uint64_t, 1> inData_buf(dataSize);
-    sycl::buffer<uint64_t, 1> twiddleFactors_buf(dataSize);
-    sycl::buffer<uint64_t, 1> modulus_buf(1);
-    sycl::buffer<uint64_t, 1> outData_buf(dataSize);
-
     // Initialize input data and twiddle factors
-    initialize_data(dataSize, q_modulus, primitive_root, input_data, twiddle_factors, 
-                    inData_buf, twiddleFactors_buf, modulus_buf);
+    initialize_data(dataSize, q_modulus, primitive_root, input_data, twiddle_factors);
 
     // Create separate copies of input data for each NTT computation
     std::vector<uint64_t> input_data_ref = input_data;
@@ -175,7 +163,7 @@ int main() {
     radix4_ntt_cpu(dataSize, q_modulus, twiddle_factors, input_data_radix4);
 
     // Perform forward NTT on the FPGA
-    fpga_ntt(q, dataSize, inData_buf, twiddleFactors_buf, modulus_buf, outData_buf, output_data);
+    fpga_ntt(q, dataSize, input_data, twiddle_factors, q_modulus, outData_buf, output_data);
 
     return 0;
 }
