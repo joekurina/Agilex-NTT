@@ -156,6 +156,9 @@ int main() {
     std::vector<uint64_t> input_data_ref = input_data;
     std::vector<uint64_t> input_data_radix4 = input_data;
 
+    // Create output buffer for FPGA
+    sycl::buffer<uint64_t, 1> outData_buf(dataSize);
+
     // Perform forward NTT (reference) on the CPU and save results
     ref_ntt_cpu(dataSize, q_modulus, twiddle_factors, input_data_ref);
 
