@@ -175,7 +175,7 @@ int main() {
     radix4_ntt_cpu(dataSize, q_modulus, twiddle_factors, input_data_radix4);
 
     // Perform forward NTT on the FPGA
-    fpga_ntt(q, dataSize, inData_buf, twiddleFactors_buf, modulus_buf, outData_buf);
+    fpga_ntt(q, dataSize, inData_buf, twiddleFactors_buf, modulus_buf, outData_buf, output_data);
 
     return 0;
 }
