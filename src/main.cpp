@@ -1,7 +1,7 @@
 // main.cpp
 
 #include "kernel/ntt.h"
-#include "naive_ntt.h" // Include the naive NTT implementation header
+// #include "naive_ntt.h" // Include the naive NTT implementation header
 #include <CL/sycl.hpp>
 #include <sycl/ext/intel/fpga_extensions.hpp>
 #include <dpc_common.hpp>

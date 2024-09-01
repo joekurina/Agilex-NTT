@@ -3,7 +3,7 @@ TARGET_HW     = fpga_hardware
 TARGET_REPORT = fpga_report.a
 
 # Source files
-SRCS     = src/main.cpp src/kernel/ntt.cpp src/naive_ntt.cpp 
+SRCS     = src/main.cpp src/kernel/ntt.cpp # src/naive_ntt.cpp 
 OBJS     = $(SRCS:.cpp=.o)
 ETS      = $(SRCS:.cpp=.d)
 
