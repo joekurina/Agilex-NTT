@@ -8,6 +8,12 @@
 #define FPGA_NTT_SIZE 16384  // Example size
 #endif
 
+// Define the mul_op_t structure
+struct mul_op_t {
+    uint64_t op;
+    uint64_t con;
+};
+
 using namespace cl::sycl;
 
 template <size_t idx>
