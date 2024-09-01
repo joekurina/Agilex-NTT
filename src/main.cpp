@@ -14,6 +14,19 @@
 
 using namespace cl::sycl;
 
+// Function to compute (base^exp) % mod
+uint64_t powmod(uint64_t base, uint64_t exp, uint64_t mod) {
+    uint64_t result = 1;
+    base = base % mod;
+    while (exp > 0) {
+        if (exp % 2 == 1)
+            result = (result * base) % mod;
+        exp = exp >> 1;
+        base = (base * base) % mod;
+    }
+    return result;
+}
+
 // Function to compare two arrays
 bool compare_arrays(const std::vector<uint64_t>& a, const std::vector<uint64_t>& b, uint64_t q_modulus) {
     if (a.size() != b.size()) return false;
