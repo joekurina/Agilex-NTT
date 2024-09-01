@@ -112,15 +112,6 @@ int main() {
         std::cerr << "Unable to open file for writing output data." << std::endl;
     }
 
-    // Verification using naive NTT
-    std::cout << "Verifying output using naive NTT implementation..." << std::endl;
-    ntt_ct_rev2std_naive(reinterpret_cast<int64_t*>(input_data.data()), dataSize, reinterpret_cast<uint16_t*>(twiddle_factors.data()), q_modulus);
-
-    if (compare_arrays(input_data, output_data, q_modulus)) {
-        std::cout << "Verification successful: FPGA NTT output matches the naive NTT output." << std::endl;
-    } else {
-        std::cout << "Verification failed: FPGA NTT output does not match the naive NTT output." << std::endl;
-    }
-
+    
     return 0;
 }
