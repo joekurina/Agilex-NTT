@@ -18,7 +18,7 @@ void fwd_ntt_kernel(sycl::queue& q,
 
         // Kernel execution
         h.single_task<FWD_NTT<id>>([=]() {
-            const size_t N = data_buf.get_count();  // Use get_count() instead of get_size()
+            const size_t N = data_buf.size();
 
             for (size_t m = 1, t = N >> 1; m < N; m <<= 1, t >>= 1) {
                 size_t k = 0;
