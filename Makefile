@@ -3,13 +3,28 @@ TARGET_HW     = fpga_hardware
 TARGET_REPORT = fpga_report.a
 
 # Source files
-SRCS     = src/main.cpp src/kernel/ntt.cpp
-OBJS     = $(SRCS:.cpp=.o)
-ETS      = $(SRCS:.cpp=.d)
+C_SRCS   = src/ntt_radix4.c src/ntt_reference.c
+CPP_SRCS = src/main.cpp src/kernel/ntt.cpp
+SRCS     = $(CPP_SRCS) $(C_SRCS)
+OBJS     = $(CPP_SRCS:.cpp=.o) $(C_SRCS:.c=.o)
+ETS      = $(CPP_SRCS:.cpp=.d) $(C_SRCS:.c=.d)
 
 # Compiler and flags
-CXX      = dpcpp
-CXXFLAGS = -std=c++17 -Iinclude -Iinclude/kernel -Iinclude/utils
+CXX      = icpx
+CC       = icx
+CXXFLAGS = -std=c++17 -Iinclude -Iinclude/kernel
+
+# Add the C compiler flags from the CMake file
+CFLAGS   = -ggdb -O3 -fPIC
+CFLAGS  += -fvisibility=hidden -Wall -Wextra -Werror -Wpedantic
+CFLAGS  += -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow
+CFLAGS  += -Wwrite-strings -Wformat-security -Wcast-qual -Wunused-result
+
+# Architecture-specific flags
+CFLAGS  += -march=native -mno-red-zone
+
+# Add any additional flags based on conditions
+# (Assuming no additional conditions for sanitizers, etc.)
 
 .PHONY: build build_emu build_hw report run_emu run_hw clean run
 .DEFAULT_GOAL := build_emu
@@ -30,19 +45,19 @@ build: build_emu
 build_emu: $(TARGET_EMU)
 
 $(TARGET_EMU): $(SRCS)
-	$(CXX) $(CXXFLAGS) $(EMULATOR_FLAGS) -o $@ $^ 
+	$(CXX) $(CXXFLAGS) $(EMULATOR_FLAGS) -o $@ $(OBJS)
 
 # Generate FPGA optimization report (without compiling all the way to hardware)
 report: $(TARGET_REPORT)
 
 $(TARGET_REPORT): $(SRCS)
-	$(CXX) $(CXXFLAGS) $(REPORT_FLAGS) -o $@ $^ 
+	$(CXX) $(CXXFLAGS) $(REPORT_FLAGS) -o $@ $(OBJS)
 
 # Build for FPGA hardware
 build_hw: $(TARGET_HW)
 
 $(TARGET_HW): $(SRCS)
-	$(CXX) $(CXXFLAGS) $(HARDWARE_FLAGS) -fintelfpga -o $@ $^ 
+	$(CXX) $(CXXFLAGS) $(HARDWARE_FLAGS) -fintelfpga -o $@ $(OBJS)
 
 # Run on the FPGA emulator
 run: run_emu
