@@ -1,18 +1,17 @@
-#ifndef NTT_H
-#define NTT_H
+#ifndef NTT_HPP
+#define NTT_HPP
 
+#include "defs.hpp"
+#include "fast_mul_operators.hpp"
 #include <CL/sycl.hpp>
 #include <sycl/ext/intel/fpga_extensions.hpp>
+
+// Use the ntt namespace to encapsulate everything
+namespace ntt {
 
 #ifndef FPGA_NTT_SIZE
 #define FPGA_NTT_SIZE 16384  // Example size
 #endif
-
-// Define the mul_op_t structure
-struct mul_op_t {
-    uint64_t op;
-    uint64_t con;
-};
 
 using namespace cl::sycl;
 
@@ -26,4 +25,5 @@ void fwd_ntt_kernel(sycl::queue& q,
                     buffer<uint64_t, 1>& modulus_buf,
                     buffer<uint64_t, 1>& outData_buf);
 
-#endif // NTT_H
+}
+#endif // NTT_HPP
