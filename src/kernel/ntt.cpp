@@ -10,7 +10,7 @@ void fwd_ntt_kernel(sycl::queue& q,
                     sycl::buffer<uint64_t, 1>& outData_buf) {
 
     q.submit([&](sycl::handler& h) {
-        // Accessors
+        // Accessors (captured by value)
         auto data_acc = data_buf.get_access<sycl::access::mode::read_write>(h);
         auto twiddleFactors_acc = twiddleFactors_buf.get_access<sycl::access::mode::read>(h);
         auto modulus_acc = modulus_buf.get_access<sycl::access::mode::read>(h);
@@ -18,13 +18,12 @@ void fwd_ntt_kernel(sycl::queue& q,
 
         // Kernel execution
         h.single_task<FWD_NTT<id>>([=]() {
-            const size_t N = data_buf.size();
+            const size_t N = data_acc.get_range().size();  // Correctly get the size of the buffer
 
             for (size_t m = 1, t = N >> 1; m < N; m <<= 1, t >>= 1) {
                 size_t k = 0;
                 for (size_t i = 0; i < m; i++) {
                     const uint64_t w = twiddleFactors_acc[m + i];
-                    const uint64_t w_con = twiddleFactors_acc[m + i];  // Assuming w_con is the same, adjust if needed
 
                     for (size_t j = k; j < k + t; j++) {
                         uint64_t a0 = data_acc[j];
