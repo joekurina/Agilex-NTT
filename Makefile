@@ -16,11 +16,14 @@ CXXFLAGS = -std=c++17 -fsycl -Iinclude -Iinclude/kernel
 # Add the C compiler flags from the CMake file
 CFLAGS   = -ggdb -O3 -fPIC
 CFLAGS  += -fvisibility=hidden -Wall -Wextra -Werror -Wpedantic
-CFLAGS  += -Wunused -Wcomment -Wchar-subscripts -Wuninitialized -Wshadow
+CFLAGS  += -Wunused -Wcomment -Wuninitialized -Wshadow
 CFLAGS  += -Wwrite-strings -Wformat-security -Wcast-qual -Wunused-result
 
 # Architecture-specific flags
 CFLAGS  += -march=native -mno-red-zone
+
+# Include directory for ntt_radix4.h
+CFLAGS  += -Iinclude
 
 # Add any additional flags based on conditions
 # (Assuming no additional conditions for sanitizers, etc.)
