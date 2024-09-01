@@ -7,12 +7,11 @@ C_SRCS   = src/ntt_radix4.c src/ntt_reference.c
 CPP_SRCS = src/main.cpp src/kernel/ntt.cpp
 SRCS     = $(CPP_SRCS) $(C_SRCS)
 OBJS     = $(CPP_SRCS:.cpp=.o) $(C_SRCS:.c=.o)
-ETS      = $(CPP_SRCS:.cpp=.d) $(C_SRCS:.c=.d)
 
 # Compiler and flags
 CXX      = icpx
 CC       = icx
-CXXFLAGS = -std=c++17 -Iinclude -Iinclude/kernel
+CXXFLAGS = -std=c++17 -fsycl -Iinclude -Iinclude/kernel
 
 # Add the C compiler flags from the CMake file
 CFLAGS   = -ggdb -O3 -fPIC
@@ -40,24 +39,31 @@ EMULATOR_FLAGS  = -fintelfpga -DFPGA_EMULATOR -Xsv
 HARDWARE_FLAGS  = -fintelfpga -Xsv -Xshardware -Xsboard=$(FPGA_DEVICE)
 REPORT_FLAGS    = $(HARDWARE_FLAGS) -fsycl-link
 
+# Build rules for object files
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) $(EMULATOR_FLAGS) -c $< -o $@
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
 # Build for FPGA emulator
 build: build_emu
 build_emu: $(TARGET_EMU)
 
-$(TARGET_EMU): $(SRCS)
+$(TARGET_EMU): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(EMULATOR_FLAGS) -o $@ $(OBJS)
 
 # Generate FPGA optimization report (without compiling all the way to hardware)
 report: $(TARGET_REPORT)
 
-$(TARGET_REPORT): $(SRCS)
+$(TARGET_REPORT): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(REPORT_FLAGS) -o $@ $(OBJS)
 
 # Build for FPGA hardware
 build_hw: $(TARGET_HW)
 
-$(TARGET_HW): $(SRCS)
-	$(CXX) $(CXXFLAGS) $(HARDWARE_FLAGS) -fintelfpga -o $@ $(OBJS)
+$(TARGET_HW): $(OBJS)
+	$(CXX) $(CXXFLAGS) $(HARDWARE_FLAGS) -o $@ $(OBJS)
 
 # Run on the FPGA emulator
 run: run_emu
