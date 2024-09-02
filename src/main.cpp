@@ -1,5 +1,6 @@
 // main.cpp
 #include "defs.h"
+#include "fast_mul_operators.h"
 #include "ntt_reference.h"
 #include "ntt_radix4.h"
 #include "kernel/ntt.hpp"
@@ -18,16 +19,28 @@ using namespace cl::sycl;
 // Function to compute (base^exp) % mod using modular exponentiation by squaring
 uint64_t powmod(uint64_t base, uint64_t exp, uint64_t mod) {
     uint64_t result = 1;                            // Initialize result to 1 (this will hold the final answer)
-    base = base % mod;                              // Take the base modulo `mod` to ensure it's within the modulus
-    while (exp > 0) {                               // Loop until `exp` becomes 0
-        if (exp % 2 == 1)                           // If `exp` is odd, multiply the current `result` by `base`
-            result = (result * base) % mod;         // Update `result` with the product modulo `mod`
+    base = base % mod;                              // Take the base modulo mod to ensure it's within the modulus
+    while (exp > 0) {                               // Loop until exp becomes 0
+        if (exp % 2 == 1)                           // If exp is odd, multiply the current result by base
+            result = (result * base) % mod;         // Update result with the product modulo mod
         exp = exp / 2;                              // Halve the exponent (this is the "divide and conquer" part)
-        base = (base * base) % mod;                 // Square the base and take modulo `mod` (prepare for next iteration)
+        base = (base * base) % mod;                 // Square the base and take modulo mod (prepare for next iteration)
     }
     return result;                                  // Return the final result (which is (base^exp) % mod)
 }
 
+// 128-bit function to compute (base^exp) % mod using modular exponentiation by squaring
+__uint128_t powmod128(__uint128_t base, __uint128_t exp, __uint128_t mod) {
+    __uint128_t result = 1;                            
+    base = base % mod;                                
+    while (exp > 0) {                                
+        if (exp % 2 == 1)                            
+            result = (result * base) % mod;         
+        exp = exp / 2;                              
+        base = (base * base) % mod;                
+    }
+    return result;                                 
+}
 
 // Function to compare two arrays
 bool compare_arrays(const std::vector<uint64_t>& a, const std::vector<uint64_t>& b, uint64_t q_modulus) {
@@ -107,10 +120,8 @@ void ref_ntt_cpu(size_t dataSize, uint64_t q_modulus,
     }
 
     // Compute n_inv (modular inverse of N modulo q)
-    uint64_t n_inv_value = powmod(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
-
-    // Compute the second part of n_inv in 128-bit space to avoid overflow
-    mul_op_t n_inv = {n_inv_value, HIGH_WORD(n_inv_value) / q_modulus};
+    __uint128_t n_inv_value = powmod128(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
+    mul_op_t n_inv = {n_inv_value, (n_inv_value << 64) / q_modulus};
 
     // Perform inverse NTT on the data
     inv_ntt_ref_harvey(data.data(), dataSize, q_modulus, n_inv, 64, twiddle_factors.data(), twiddle_factors.data());
@@ -148,9 +159,8 @@ void radix4_ntt_cpu(size_t dataSize, uint64_t q_modulus,
     }
 
     // Compute n_inv (modular inverse of N modulo q)
-    uint64_t n_inv_value = powmod(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
-    // mul_op_t n_inv = {n_inv_value, (n_inv_value << 64) / q_modulus};
-    mul_op_t n_inv = {n_inv_value, HIGH_WORD(n_inv_value) / q_modulus};
+    __uint128_t n_inv_value = powmod128(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
+    mul_op_t n_inv = {n_inv_value, (n_inv_value << 64) / q_modulus};
 
     // Perform inverse NTT on the data
     inv_ntt_radix4(data.data(), dataSize, q_modulus, n_inv, twiddle_factors.data(), twiddle_factors.data());
