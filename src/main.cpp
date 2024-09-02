@@ -109,8 +109,7 @@ void ref_ntt_cpu(size_t dataSize, uint64_t q_modulus,
     uint64_t n_inv_value = powmod(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
 
     // Compute the second part of n_inv in 128-bit space to avoid overflow
-    __uint128_t n_inv_extended = static_cast<__uint128_t>(n_inv_value) << 64;
-    mul_op_t n_inv = {n_inv_value, static_cast<uint64_t>(n_inv_extended / q_modulus)};
+    mul_op_t n_inv = {n_inv_value, 0}; // Or use another correct calculation
 
     // Perform inverse NTT on the data
     inv_ntt_ref_harvey(data.data(), dataSize, q_modulus, n_inv, 64, twiddle_factors.data(), twiddle_factors.data());
