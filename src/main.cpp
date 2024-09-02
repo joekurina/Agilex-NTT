@@ -45,22 +45,29 @@ bool compare_arrays(const std::vector<uint64_t>& a, const std::vector<uint64_t>&
 void initialize_data(size_t dataSize, uint64_t q_modulus, uint64_t primitive_root, 
                      std::vector<uint64_t>& input_data, std::vector<uint64_t>& twiddle_factors) {
     std::ofstream input_file("input.txt");
+    std::ofstream twiddle_file("twiddle_factors.txt");
 
-    if (input_file.is_open()) {
+    if (input_file.is_open() && twiddle_file.is_open()) {
         for (size_t i = 0; i < dataSize; ++i) {
+            // Initialize and save input data
             input_data[i] = i;
             input_file << input_data[i] << std::endl;
-        }
 
-        for (size_t i = 0; i < dataSize; ++i) {
+            // Calculate and save twiddle factors
             twiddle_factors[i] = powmod(primitive_root, i, q_modulus);
+            twiddle_file << twiddle_factors[i] << std::endl;
         }
 
         input_file << "Modulus: " << q_modulus << std::endl;
+        twiddle_file << "Modulus: " << q_modulus << std::endl;
+
         input_file.close();
+        twiddle_file.close();
+
         std::cout << "Input data saved to input.txt." << std::endl;
+        std::cout << "Twiddle factors saved to twiddle_factors.txt." << std::endl;
     } else {
-        std::cerr << "Unable to open file for writing input data." << std::endl;
+        std::cerr << "Unable to open file for writing input data or twiddle factors." << std::endl;
     }
 }
 
