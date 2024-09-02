@@ -1,4 +1,5 @@
 // main.cpp
+#include "defs.h"
 #include "ntt_reference.h"
 #include "ntt_radix4.h"
 #include "kernel/ntt.hpp"
@@ -109,7 +110,7 @@ void ref_ntt_cpu(size_t dataSize, uint64_t q_modulus,
     uint64_t n_inv_value = powmod(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
 
     // Compute the second part of n_inv in 128-bit space to avoid overflow
-    mul_op_t n_inv = {n_inv_value, 0}; // Or use another correct calculation
+    mul_op_t n_inv = {n_inv_value, HIGH_WORD(n_inv_value) / q_modulus};
 
     // Perform inverse NTT on the data
     inv_ntt_ref_harvey(data.data(), dataSize, q_modulus, n_inv, 64, twiddle_factors.data(), twiddle_factors.data());
@@ -149,7 +150,7 @@ void radix4_ntt_cpu(size_t dataSize, uint64_t q_modulus,
     // Compute n_inv (modular inverse of N modulo q)
     uint64_t n_inv_value = powmod(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
     // mul_op_t n_inv = {n_inv_value, (n_inv_value << 64) / q_modulus};
-    mul_op_t n_inv = {n_inv_value, 0}; // Or use another correct calculation
+    mul_op_t n_inv = {n_inv_value, HIGH_WORD(n_inv_value) / q_modulus};
 
     // Perform inverse NTT on the data
     inv_ntt_radix4(data.data(), dataSize, q_modulus, n_inv, twiddle_factors.data(), twiddle_factors.data());
