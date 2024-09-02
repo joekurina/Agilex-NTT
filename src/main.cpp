@@ -115,7 +115,6 @@ void ref_ntt_cpu(size_t dataSize, uint64_t q_modulus,
     // Perform inverse NTT on the data
     inv_ntt_ref_harvey(data.data(), dataSize, q_modulus, n_inv, 64, twiddle_factors.data(), twiddle_factors.data());
 
-
     // Save the result of the inverse NTT to a separate file
     std::ofstream inv_output_file("ref_intt_output.txt");
     if (inv_output_file.is_open()) {
