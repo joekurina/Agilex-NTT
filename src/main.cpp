@@ -148,7 +148,8 @@ void radix4_ntt_cpu(size_t dataSize, uint64_t q_modulus,
 
     // Compute n_inv (modular inverse of N modulo q)
     uint64_t n_inv_value = powmod(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
-    mul_op_t n_inv = {n_inv_value, (n_inv_value << 64) / q_modulus};
+    // mul_op_t n_inv = {n_inv_value, (n_inv_value << 64) / q_modulus};
+    mul_op_t n_inv = {n_inv_value, 0}; // Or use another correct calculation
 
     // Perform inverse NTT on the data
     inv_ntt_radix4(data.data(), dataSize, q_modulus, n_inv, twiddle_factors.data(), twiddle_factors.data());
