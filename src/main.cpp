@@ -107,10 +107,14 @@ void ref_ntt_cpu(size_t dataSize, uint64_t q_modulus,
 
     // Compute n_inv (modular inverse of N modulo q)
     uint64_t n_inv_value = powmod(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
-    mul_op_t n_inv = {n_inv_value, (n_inv_value << 64) / q_modulus};
+
+    // Compute the second part of n_inv in 128-bit space to avoid overflow
+    __uint128_t n_inv_extended = static_cast<__uint128_t>(n_inv_value) << 64;
+    mul_op_t n_inv = {n_inv_value, static_cast<uint64_t>(n_inv_extended / q_modulus)};
 
     // Perform inverse NTT on the data
     inv_ntt_ref_harvey(data.data(), dataSize, q_modulus, n_inv, 64, twiddle_factors.data(), twiddle_factors.data());
+
 
     // Save the result of the inverse NTT to a separate file
     std::ofstream inv_output_file("ref_intt_output.txt");
