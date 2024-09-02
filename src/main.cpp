@@ -14,18 +14,19 @@
 
 using namespace cl::sycl;
 
-// Function to compute (base^exp) % mod
+// Function to compute (base^exp) % mod using modular exponentiation by squaring
 uint64_t powmod(uint64_t base, uint64_t exp, uint64_t mod) {
-    uint64_t result = 1;
-    base = base % mod;
-    while (exp > 0) {
-        if (exp % 2 == 1)
-            result = (result * base) % mod;
-        exp = exp >> 1;
-        base = (base * base) % mod;
+    uint64_t result = 1;                            // Initialize result to 1 (this will hold the final answer)
+    base = base % mod;                              // Take the base modulo `mod` to ensure it's within the modulus
+    while (exp > 0) {                               // Loop until `exp` becomes 0
+        if (exp % 2 == 1)                           // If `exp` is odd, multiply the current `result` by `base`
+            result = (result * base) % mod;         // Update `result` with the product modulo `mod`
+        exp = exp / 2;                              // Halve the exponent (this is the "divide and conquer" part)
+        base = (base * base) % mod;                 // Square the base and take modulo `mod` (prepare for next iteration)
     }
-    return result;
+    return result;                                  // Return the final result (which is (base^exp) % mod)
 }
+
 
 // Function to compare two arrays
 bool compare_arrays(const std::vector<uint64_t>& a, const std::vector<uint64_t>& b, uint64_t q_modulus) {
@@ -44,64 +45,122 @@ bool compare_arrays(const std::vector<uint64_t>& a, const std::vector<uint64_t>&
 // Function to initialize input data and twiddle factors
 void initialize_data(size_t dataSize, uint64_t q_modulus, uint64_t primitive_root, 
                      std::vector<uint64_t>& input_data, std::vector<uint64_t>& twiddle_factors) {
+    
+    // Open a file to save the generated input data
     std::ofstream input_file("input.txt");
+
+    // Open a file to save the generated twiddle factors
     std::ofstream twiddle_file("twiddle_factors.txt");
 
+    // Check if both files are successfully opened
     if (input_file.is_open() && twiddle_file.is_open()) {
         for (size_t i = 0; i < dataSize; ++i) {
-            // Initialize and save input data
+            // Initialize input data with sequential values (0, 1, 2, ..., dataSize-1)
             input_data[i] = i;
+
+            // Write the initialized input data to the input file
             input_file << input_data[i] << std::endl;
 
-            // Calculate and save twiddle factors
+            // Calculate the i-th twiddle factor using modular exponentiation
             twiddle_factors[i] = powmod(primitive_root, i, q_modulus);
+
+            // Write the calculated twiddle factor to the twiddle factors file
             twiddle_file << twiddle_factors[i] << std::endl;
         }
 
+        // Write the modulus value to the end of both files for reference
         input_file << "Modulus: " << q_modulus << std::endl;
         twiddle_file << "Modulus: " << q_modulus << std::endl;
 
+        // Close both files after writing
         input_file.close();
         twiddle_file.close();
 
+        // Output messages
         std::cout << "Input data saved to input.txt." << std::endl;
         std::cout << "Twiddle factors saved to twiddle_factors.txt." << std::endl;
     } else {
+        // Error message
         std::cerr << "Unable to open file for writing input data or twiddle factors." << std::endl;
     }
 }
 
-// Function to perform Reference forward NTT on the CPU and save results
+
+// Function to perform Reference forward NTT on the CPU, then an inverse NTT, and save the results
 void ref_ntt_cpu(size_t dataSize, uint64_t q_modulus, 
                  const std::vector<uint64_t>& twiddle_factors, std::vector<uint64_t>& data) {
+    
+    // Perform forward NTT (Harvey Lazy) on the data
     fwd_ntt_ref_harvey_lazy(data.data(), dataSize, q_modulus, twiddle_factors.data(), twiddle_factors.data());
 
-    std::ofstream output_file("cpu_output_data_reference.txt");
+    // Save the result of the forward NTT to a file
+    std::ofstream output_file("ref_ntt_output.txt");
     if (output_file.is_open()) {
         for (size_t i = 0; i < dataSize; ++i) {
             output_file << data[i] << std::endl;
         }
         output_file.close();
-        std::cout << "CPU output data saved to cpu_output_data_reference.txt" << std::endl;
+        std::cout << "CPU forward NTT output data saved to ref_ntt_output.txt" << std::endl;
     } else {
-        std::cerr << "Unable to open file for writing CPU output data." << std::endl;
+        std::cerr << "Unable to open file for writing CPU forward NTT output data." << std::endl;
+    }
+
+    // Compute n_inv (modular inverse of N modulo q)
+    uint64_t n_inv_value = powmod(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
+    mul_op_t n_inv = {n_inv_value, (n_inv_value << 64) / q_modulus};
+
+    // Perform inverse NTT on the data
+    inv_ntt_ref_harvey(data.data(), dataSize, q_modulus, n_inv, 64, twiddle_factors.data(), twiddle_factors.data());
+
+    // Save the result of the inverse NTT to a separate file
+    std::ofstream inv_output_file("ref_intt_output.txt");
+    if (inv_output_file.is_open()) {
+        for (size_t i = 0; i < dataSize; ++i) {
+            inv_output_file << data[i] << std::endl;
+        }
+        inv_output_file.close();
+        std::cout << "CPU inverse NTT output data saved to ref_intt_output.txt" << std::endl;
+    } else {
+        std::cerr << "Unable to open file for writing CPU inverse NTT output data." << std::endl;
     }
 }
 
-// Function to perform Radix-4 forward NTT on the CPU and save results
+// Function to perform Radix-4 forward NTT on the CPU, then an inverse NTT, and save the results
 void radix4_ntt_cpu(size_t dataSize, uint64_t q_modulus, 
                     const std::vector<uint64_t>& twiddle_factors, std::vector<uint64_t>& data) {
+    
+    // Perform forward NTT (Radix-4) on the data
     fwd_ntt_radix4_lazy(data.data(), dataSize, q_modulus, twiddle_factors.data(), twiddle_factors.data());
 
-    std::ofstream output_file("cpu_output_data_radix4.txt");
+    // Save the result of the forward NTT to a file
+    std::ofstream output_file("radix4_ntt_output.txt");
     if (output_file.is_open()) {
         for (size_t i = 0; i < dataSize; ++i) {
             output_file << data[i] << std::endl;
         }
         output_file.close();
-        std::cout << "CPU output data saved to cpu_output_data_radix4.txt" << std::endl;
+        std::cout << "CPU forward NTT output data saved to radix4_ntt_output.txt" << std::endl;
     } else {
-        std::cerr << "Unable to open file for writing CPU output data." << std::endl;
+        std::cerr << "Unable to open file for writing CPU forward NTT output data." << std::endl;
+    }
+
+    // Compute n_inv (modular inverse of N modulo q)
+    uint64_t n_inv_value = powmod(dataSize, q_modulus - 2, q_modulus);  // Using Fermat's little theorem
+    mul_op_t n_inv = {n_inv_value, (n_inv_value << 64) / q_modulus};
+
+    // Perform inverse NTT on the data
+    inv_ntt_radix4(data.data(), dataSize, q_modulus, n_inv, twiddle_factors.data(), twiddle_factors.data());
+
+    // Save the result of the inverse NTT to a separate file
+    std::ofstream inv_output_file("radix4_intt_output.txt");
+    if (inv_output_file.is_open()) {
+        for (size_t i = 0; i < dataSize; ++i) {
+            inv_output_file << data[i] << std::endl;
+        }
+        inv_output_file.close();
+        std::cout << "CPU inverse NTT output data saved to radix4_intt_output.txt" << std::endl;
+    } else {
+        std::cerr << "Unable to open file for writing CPU inverse NTT output data." << std::endl;
     }
 }
 
