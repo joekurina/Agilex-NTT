@@ -4,8 +4,8 @@
 #include "ntt_reference.h"
 #include "ntt_radix4.h"
 #include "kernel/ntt.hpp"
-#include "test_cases.h"             // Include the test cases header
-#include "tests.h"                  // Include the tests header
+#include "test_cases.h"
+#include "tests.h"
 #include <CL/sycl.hpp>
 #include <sycl/ext/intel/fpga_extensions.hpp>
 #include <dpc_common.hpp>
@@ -14,14 +14,12 @@
 #include <cmath>
 #include <vector>
 
-#ifndef FPGA_NTT_SIZE
-#define FPGA_NTT_SIZE 16384  // Example size
-#endif
+#define FPGA_NTT_SIZE 16384 // FPGA_NTT_SIZE must be a power of 2
 
 using namespace cl::sycl;
 
 // Function to test the FPGA kernel against the reference implementation
-void test_fpga_kernel(const sycl::queue& q, const test_case_t& t) {
+void test_fpga_kernel(sycl::queue& q, const test_case_t& t) {
     // Create buffers for data, twiddle factors, and modulus
     sycl::buffer<uint64_t, 1> data_buf(t.n);
     sycl::buffer<uint64_t, 1> twiddleFactors_buf(t.w_powers.ptr, t.n);
