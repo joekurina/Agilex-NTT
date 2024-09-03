@@ -55,7 +55,7 @@ int main() {
         sycl::buffer<uint64_t, 1> outData_buf(tests[i].n);
 
         // Run the reference CPU NTT
-        uint64_t a_ntt[t->n];
+        uint64_t a_ntt[tests[i].n];
         memcpy(a_ntt, tests[i].w_powers.ptr, sizeof(uint64_t) * tests[i].n);
         fwd_ntt_ref_harvey(a_ntt, tests[i].n, tests[i].q, tests[i].w_powers.ptr, tests[i].w_powers_con.ptr);
 
@@ -66,7 +66,7 @@ int main() {
         }
 
         // Run the radix-4 CPU NTT
-        uint64_t a_radix4[t->n];
+        uint64_t a_radix4[tests[i].n];
         memcpy(a_radix4, tests[i].w_powers.ptr, sizeof(uint64_t) * tests[i].n);
         fwd_ntt_radix4(a_radix4, tests[i].n, tests[i].q, tests[i].w_powers_r4.ptr, tests[i].w_powers_con_r4.ptr);
 
