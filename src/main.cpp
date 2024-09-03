@@ -18,7 +18,7 @@
 using namespace cl::sycl;
 
 // Function to test the FPGA kernel against the reference implementation
-void test_fpga_kernel(sycl::queue& q, const test_case_t& t, std::ofstream& log_file) {
+void test_fpga_kernel(sycl::queue& q, const test_case_t& t, std::ofstream& fpga_log_file) {
     // Create buffers for data, twiddle factors, and modulus
     sycl::buffer<uint64_t, 1> data_buf(t.n);
     sycl::buffer<uint64_t, 1> twiddleFactors_buf(t.w_powers.ptr, t.n);
@@ -51,16 +51,16 @@ void test_fpga_kernel(sycl::queue& q, const test_case_t& t, std::ofstream& log_f
         bool success = true;
         for (size_t i = 0; i < t.n; ++i) {
             if (outData_acc[i] != reference_data[i]) {
-                log_file << "Mismatch at index " << i << ": FPGA=" << outData_acc[i]
+                fpga_log_file << "Mismatch at index " << i << ": FPGA=" << outData_acc[i]
                           << ", Reference=" << reference_data[i] << std::endl;
                 success = false;
             }
         }
 
         if (success) {
-            log_file << "FPGA kernel test passed." << std::endl;
+            fpga_log_file << "FPGA kernel test passed." << std::endl;
         } else {
-            log_file << "FPGA kernel test failed." << std::endl;
+            fpga_log_file << "FPGA kernel test failed." << std::endl;
         }
     }
 }
@@ -72,10 +72,17 @@ int main() {
         return 1;
     }
 
-    // Open the log file for writing the results
-    std::ofstream log_file("test_results.txt");
-    if (!log_file.is_open()) {
-        std::cerr << "Failed to open log file for writing." << std::endl;
+    // Open the log files for writing the results
+    std::ofstream cpu_log_file("cpu_test_results.txt");
+    std::ofstream fpga_log_file("fpga_test_results.txt");
+
+    if (!cpu_log_file.is_open()) {
+        std::cerr << "Failed to open CPU log file for writing." << std::endl;
+        return 1;
+    }
+
+    if (!fpga_log_file.is_open()) {
+        std::cerr << "Failed to open FPGA log file for writing." << std::endl;
         return 1;
     }
 
@@ -91,24 +98,26 @@ int main() {
     
     // Run each test case
     for (size_t i = 0; i < NUM_OF_TEST_CASES; ++i) {
-        log_file << "Running test case " << i + 1 << " of " << NUM_OF_TEST_CASES << std::endl;
+        cpu_log_file << "Running test case " << i + 1 << " of " << NUM_OF_TEST_CASES << std::endl;
+        fpga_log_file << "Running test case " << i + 1 << " of " << NUM_OF_TEST_CASES << std::endl;
 
         // Test the CPU implementations
         if (test_correctness(&tests[i]) != SUCCESS) {
-            log_file << "Test case " << i + 1 << " failed on CPU!" << std::endl;
+            cpu_log_file << "Test case " << i + 1 << " failed on CPU!" << std::endl;
         } else {
-            log_file << "Test case " << i + 1 << " passed on CPU." << std::endl;
+            cpu_log_file << "Test case " << i + 1 << " passed on CPU." << std::endl;
         }
 
         // Test the FPGA kernel implementation
-        test_fpga_kernel(q, tests[i], log_file);
+        test_fpga_kernel(q, tests[i], fpga_log_file);
     }
 
     // Cleanup test cases
     destroy_test_cases();
 
-    // Close the log file
-    log_file.close();
+    // Close the log files
+    cpu_log_file.close();
+    fpga_log_file.close();
 
     return 0;
 }
